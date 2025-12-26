@@ -1,7 +1,6 @@
 // Main App with Router
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
-import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import AppWrapper from './pages/AppWrapper'
@@ -15,15 +14,8 @@ function App() {
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
 
-                    {/* Protected Routes */}
-                    <Route
-                        path="/app"
-                        element={
-                            <ProtectedRoute>
-                                <AppWrapper />
-                            </ProtectedRoute>
-                        }
-                    />
+                    {/* App Route - No protection for now */}
+                    <Route path="/app" element={<AppWrapper />} />
 
                     {/* Default redirect */}
                     <Route path="/" element={<Navigate to="/app" replace />} />
