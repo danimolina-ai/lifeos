@@ -197,41 +197,14 @@ export default function LandingPage() {
     ]
 
     return (
-        <div className="min-h-screen bg-zinc-950 text-white overflow-x-hidden">
-            {/* Background */}
-            <div className="fixed inset-0 bg-gradient-to-br from-violet-950/50 via-zinc-950 to-fuchsia-950/30 pointer-events-none" />
-
+        <SalesLayout>
             {/* Floating orbs */}
             <div className="fixed top-20 left-10 w-72 h-72 bg-violet-500/20 rounded-full blur-3xl pointer-events-none" style={{ transform: `translateY(${scrollY * 0.1}px)` }} />
             <div className="fixed bottom-20 right-10 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" style={{ transform: `translateY(${-scrollY * 0.15}px)` }} />
             <div className="fixed top-1/2 right-1/4 w-64 h-64 bg-fuchsia-500/10 rounded-full blur-3xl pointer-events-none" style={{ transform: `translateY(${scrollY * 0.08}px)` }} />
 
-            {/* Navigation */}
-            <nav className="fixed top-0 left-0 right-0 z-50 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-white/5">
-                <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <span className="text-2xl">✨</span>
-                        <span className="text-white font-bold text-xl">Life OS</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => navigate('/login')}
-                            className="px-4 py-2 text-white/70 hover:text-white transition-colors"
-                        >
-                            Iniciar sesión
-                        </button>
-                        <button
-                            onClick={() => navigate('/register')}
-                            className="px-6 py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full font-medium hover:opacity-90 transition-opacity"
-                        >
-                            Empezar gratis
-                        </button>
-                    </div>
-                </div>
-            </nav>
-
             {/* ========== HERO SECTION - CONFRONTATIONAL ========== */}
-            <section className="relative min-h-screen flex items-center justify-center pt-16">
+            <section className="relative min-h-screen flex items-center justify-center">
                 <div className="max-w-5xl mx-auto px-6 text-center">
                     {/* Badge */}
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8">
@@ -557,22 +530,7 @@ export default function LandingPage() {
                     </div>
                 </div>
             </section>
-
-            {/* ========== FOOTER ========== */}
-            <footer className="py-12 px-6 border-t border-white/5">
-                <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-                    <div className="flex items-center gap-2">
-                        <span className="text-xl">✨</span>
-                        <span className="text-white/60 font-medium">Life OS</span>
-                    </div>
-                    <p className="text-white/30 text-sm text-center md:text-right">
-                        El sistema operativo para tu vida.
-                        <br className="md:hidden" />
-                        <span className="hidden md:inline"> · </span>
-                        Hecho con obsesión por el detalle.
-                    </p>
-                </div>
-            </footer>
-        </div>
+        </SalesLayout>
     )
 }
+
