@@ -1,4 +1,4 @@
-// AppWrapper - Loads data from Supabase and passes to AppPage
+// AppWrapper - Loads data from Supabase and syncs with localStorage
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNutrition } from '../hooks/useNutrition'
@@ -8,32 +8,21 @@ import AppPage from './AppPage'
 // Helper to get today's date
 const getToday = () => new Date().toISOString().split('T')[0]
 
-export default function AppWrapper() {
+// Custom hook to sync Supabase data with localStorage
+function useSupabaseSync() {
     const { user } = useAuth()
     const [selectedDate, setSelectedDate] = useState(getToday())
 
-    // Load nutrition data
     const {
         foods: allFoods,
         meals,
         loading: nutritionLoading,
         loadMeals,
-        addMeal,
-        updateMeal,
-        deleteMeal,
-        addCustomFood,
-        deleteCustomFood
     } = useNutrition()
 
-    // Load day metrics
     const {
         dayData,
         loading: dayLoading,
-        updateEnergyLevel,
-        updateSleep,
-        updateWater,
-        updateSteps,
-        updateFocusNote
     } = useDayMetrics(selectedDate)
 
     // Load meals when date changes
@@ -43,8 +32,37 @@ export default function AppWrapper() {
         }
     }, [selectedDate, user])
 
+    // Sync Supabase data to localStorage format
+    useEffect(() => {
+        if (!user || nutritionLoading || dayLoading) return
+
+        const storedData = JSON.parse(localStorage.getItem('lifeOS_v56') || '{}')
+
+        // Merge Supabase data into localStorage format
+        const updatedData = {
+            ...storedData,
+            meals: meals || storedData.meals || [],
+            days: {
+                ...(storedData.days || {}),
+                [selectedDate]: dayData || storedData.days?.[selectedDate] || {}
+            },
+            user: {
+                ...(storedData.user || {}),
+                name: user.user_metadata?.name || storedData.user?.name || 'Usuario'
+            }
+        }
+
+        localStorage.setItem('lifeOS_v56', JSON.stringify(updatedData))
+    }, [meals, dayData, user, nutritionLoading, dayLoading, selectedDate])
+
+    return { loading: nutritionLoading || dayLoading }
+}
+
+export default function AppWrapper() {
+    const { loading } = useSupabaseSync()
+
     // Show loading state
-    if (nutritionLoading || dayLoading) {
+    if (loading) {
         return (
             <div className="min-h-screen bg-slate-900 flex items-center justify-center">
                 <div className="text-center">
@@ -55,32 +73,6 @@ export default function AppWrapper() {
         )
     }
 
-    // Prepare data for AppPage
-    const supabaseData = {
-        // Nutrition
-        allFoods,
-        meals,
-        addMeal,
-        updateMeal,
-        deleteMeal,
-        addCustomFood,
-        deleteCustomFood,
-
-        // Day metrics
-        dayData,
-        updateEnergyLevel,
-        updateSleep,
-        updateWater,
-        updateSteps,
-        updateFocusNote,
-
-        // Date management
-        selectedDate,
-        setSelectedDate,
-
-        // User
-        user
-    }
-
-    return <AppPage supabaseData={supabaseData} />
+    // Render AppPage normally - it will read from localStorage which now has Supabase data
+    return <AppPage />
 }
