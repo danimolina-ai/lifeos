@@ -21975,7 +21975,7 @@ const SettingsScreen = ({ data, setData, showToast }) => {
   };
 
   const reset = () => {
-    localStorage.removeItem('lifeOS_v56');
+    localStorage.removeItem('lifeOS_v57');
     window.location.reload();
   };
 
@@ -22245,7 +22245,7 @@ const SettingsScreen = ({ data, setData, showToast }) => {
 // MAIN APP
 // ============================================================================// Main App Component
 export default function LifeOSApp() {
-  const [data, setData] = useLocalStorage('lifeOS_v56', EMPTY_DATA);
+  const [data, setData] = useLocalStorage('lifeOS_v57', EMPTY_DATA);
   const [screen, setScreen] = useState('today');
   const [toast, setToast] = useState(null);
 

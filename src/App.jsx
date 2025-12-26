@@ -25,7 +25,7 @@ function UserAvatar() {
     // Get app data from localStorage
     const getAppData = () => {
         try {
-            const stored = localStorage.getItem('lifeOS_v56')
+            const stored = localStorage.getItem('lifeOS_v57')
             return stored ? JSON.parse(stored) : null
         } catch { return null }
     }
