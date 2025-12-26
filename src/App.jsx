@@ -16,7 +16,7 @@ function DemoBanner() {
     )
 }
 
-// User Avatar - fixed global component for logged in users
+// User Avatar component
 function UserAvatar() {
     const { user, loading } = useAuth()
 
@@ -32,14 +32,27 @@ function UserAvatar() {
     return (
         <button
             onClick={handleLogout}
-            className="fixed top-4 right-20 z-50 group"
+            className="group relative"
             title={`${user.email} - Click para cerrar sesión`}
         >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-emerald-500/30 ring-2 ring-white/20 group-hover:ring-white/50 group-hover:scale-105 transition-all">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white text-sm font-bold shadow-md ring-2 ring-white/10 group-hover:ring-white/30 group-hover:scale-105 transition-all">
                 {initial}
             </div>
-            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
+            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-800" />
         </button>
+    )
+}
+
+// Global Header - like Notion/Slack style
+function GlobalHeader() {
+    return (
+        <header className="fixed top-0 left-0 right-0 z-50 h-12 bg-slate-900/95 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-4">
+            <div className="flex items-center gap-2">
+                <span className="text-lg">✨</span>
+                <span className="text-white/80 font-medium text-sm">Life OS</span>
+            </div>
+            <UserAvatar />
+        </header>
     )
 }
 
@@ -53,12 +66,14 @@ function DemoWrapper() {
     )
 }
 
-// App wrapper with user avatar
-function AppWithAvatar() {
+// App wrapper with global header
+function AppWithHeader() {
     return (
         <>
-            <UserAvatar />
-            <AppPage />
+            <GlobalHeader />
+            <div className="pt-12">
+                <AppPage />
+            </div>
         </>
     )
 }
@@ -75,12 +90,12 @@ function App() {
                     {/* Demo Route - with banner */}
                     <Route path="/demo" element={<DemoWrapper />} />
 
-                    {/* App Route - requires login, shows avatar */}
+                    {/* App Route - requires login, shows header */}
                     <Route
                         path="/app"
                         element={
                             <ProtectedRoute>
-                                <AppWithAvatar />
+                                <AppWithHeader />
                             </ProtectedRoute>
                         }
                     />
