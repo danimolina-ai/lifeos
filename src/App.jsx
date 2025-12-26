@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { supabase } from './lib/supabase'
 import ProtectedRoute from './components/ProtectedRoute'
+import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import AppPage from './pages/AppPage'
@@ -240,6 +241,9 @@ function App() {
         <AuthProvider>
             <BrowserRouter>
                 <Routes>
+                    {/* Landing Page - for visitors */}
+                    <Route path="/" element={<LandingPage />} />
+
                     {/* Auth Routes */}
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
@@ -257,9 +261,8 @@ function App() {
                         }
                     />
 
-                    {/* Default redirect to app */}
-                    <Route path="/" element={<Navigate to="/app" replace />} />
-                    <Route path="*" element={<Navigate to="/app" replace />} />
+                    {/* Fallback */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </BrowserRouter>
         </AuthProvider>

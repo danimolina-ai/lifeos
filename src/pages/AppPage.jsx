@@ -6,6 +6,7 @@ import { EXERCISE_DATABASE, EQUIPMENT_TYPES, SET_TYPES, getExerciseById, getExer
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { LogOut, User } from 'lucide-react';
+import OnboardingWizard from '../components/OnboardingWizard';
 
 
 // ============================================================================
@@ -22363,7 +22364,7 @@ export default function LifeOSApp() {
   };
 
   if (!data.user.onboardingComplete) {
-    return <OnboardingScreen data={data} setData={setData} onComplete={() => setScreen('today')} />;
+    return <OnboardingWizard data={data} setData={setData} onComplete={() => setScreen('today')} />;
   }
 
   const screens = {
