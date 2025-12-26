@@ -19,13 +19,47 @@ import { LogOut, User } from 'lucide-react';
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
+
+// Empty data template for new users (clean slate)
+const EMPTY_DATA = {
+  user: {
+    name: '',
+    onboardingComplete: false,
+    goals: { calories: 2200, protein: 180, carbs: 220, fats: 70, water: 8, sleep: 8, steps: 10000 },
+    mantra: '',
+    activeAreas: ['nutrition', 'workout', 'habits', 'work', 'personal', 'body', 'finances', 'consciousness', 'relationships'],
+    demoDataEnabled: false
+  },
+  days: {},
+  meals: [],
+  savedMeals: [],
+  plannedMeals: [],
+  customFoods: [],
+  recipes: [],
+  workouts: [],
+  habits: [],
+  habitLogs: [],
+  projects: [],
+  tasks: [],
+  workoutTemplates: [],
+  bodyMetrics: [],
+  personalRecords: [],
+  journals: [],
+  personalTasks: [],
+  personalCategories: [],
+  relationships: [],
+  finances: { transactions: [], monthlyBudget: 0 }
+};
+
+// Demo data for demonstration purposes (used when toggle is ON)
 const DEFAULT_DATA = {
   user: {
     name: 'Demo',
     onboardingComplete: true,
     goals: { calories: 2200, protein: 180, carbs: 220, fats: 70, water: 8, sleep: 8, steps: 10000 },
     mantra: 'Cada día cuenta',
-    activeAreas: ['nutrition', 'workout', 'habits', 'work', 'personal', 'body', 'finances', 'consciousness', 'relationships']
+    activeAreas: ['nutrition', 'workout', 'habits', 'work', 'personal', 'body', 'finances', 'consciousness', 'relationships'],
+    demoDataEnabled: true
   },
   days: {},
   meals: [],
@@ -22211,7 +22245,7 @@ const SettingsScreen = ({ data, setData, showToast }) => {
 // MAIN APP
 // ============================================================================// Main App Component
 export default function LifeOSApp() {
-  const [data, setData] = useLocalStorage('lifeOS_v56', generateDemoData());
+  const [data, setData] = useLocalStorage('lifeOS_v56', EMPTY_DATA);
   const [screen, setScreen] = useState('today');
   const [toast, setToast] = useState(null);
 
@@ -22221,6 +22255,40 @@ export default function LifeOSApp() {
     window.addEventListener('goToSettings', handleGoToSettings);
     return () => window.removeEventListener('goToSettings', handleGoToSettings);
   }, []);
+
+  // Listen for toggleDemoData event from profile menu
+  useEffect(() => {
+    const handleToggleDemoData = () => {
+      const isDemoEnabled = data.user?.demoDataEnabled;
+      if (isDemoEnabled) {
+        // Deactivate demo - clear all data except user settings
+        setData(prev => ({
+          ...EMPTY_DATA,
+          user: {
+            ...prev.user,
+            demoDataEnabled: false
+          }
+        }));
+        setToast({ message: 'Datos demo desactivados', type: 'success' });
+      } else {
+        // Activate demo - load demo data
+        const demoData = generateDemoData();
+        setData(prev => ({
+          ...demoData,
+          user: {
+            ...demoData.user,
+            name: prev.user?.name || 'Demo',
+            mantra: prev.user?.mantra || demoData.user.mantra,
+            goals: prev.user?.goals || demoData.user.goals,
+            demoDataEnabled: true
+          }
+        }));
+        setToast({ message: 'Datos demo activados - ahora puedes ver todo en acción', type: 'success' });
+      }
+    };
+    window.addEventListener('toggleDemoData', handleToggleDemoData);
+    return () => window.removeEventListener('toggleDemoData', handleToggleDemoData);
+  }, [data, setData]);
 
   // Migration: Initialize workTasks and workProjects if they don't exist
   useEffect(() => {
