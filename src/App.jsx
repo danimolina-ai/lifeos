@@ -1,6 +1,7 @@
 // Main App with Auth
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { supabase } from './lib/supabase'
 import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -15,6 +16,33 @@ function DemoBanner() {
     )
 }
 
+// User Avatar - fixed global component for logged in users
+function UserAvatar() {
+    const { user, loading } = useAuth()
+
+    if (loading || !user) return null
+
+    const initial = user.email.charAt(0).toUpperCase()
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut()
+        window.location.href = '/login'
+    }
+
+    return (
+        <button
+            onClick={handleLogout}
+            className="fixed top-4 right-4 z-50 group"
+            title={`${user.email} - Click para cerrar sesión`}
+        >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-emerald-500/30 ring-2 ring-white/20 group-hover:ring-white/50 group-hover:scale-105 transition-all">
+                {initial}
+            </div>
+            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
+        </button>
+    )
+}
+
 // Demo wrapper with banner
 function DemoWrapper() {
     return (
@@ -22,6 +50,16 @@ function DemoWrapper() {
             <DemoBanner />
             <AppPage />
         </div>
+    )
+}
+
+// App wrapper with user avatar
+function AppWithAvatar() {
+    return (
+        <>
+            <UserAvatar />
+            <AppPage />
+        </>
     )
 }
 
@@ -37,12 +75,12 @@ function App() {
                     {/* Demo Route - with banner */}
                     <Route path="/demo" element={<DemoWrapper />} />
 
-                    {/* App Route - requires login */}
+                    {/* App Route - requires login, shows avatar */}
                     <Route
                         path="/app"
                         element={
                             <ProtectedRoute>
-                                <AppPage />
+                                <AppWithAvatar />
                             </ProtectedRoute>
                         }
                     />
