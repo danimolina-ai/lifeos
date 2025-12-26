@@ -7302,29 +7302,18 @@ const MealsScreen = ({ data, setData, showToast }) => {
               <p className="text-white/50 text-sm">{formatDate(today)}</p>
             </div>
             <div className="flex items-center gap-2">
-              {/* Session Indicator */}
+              {/* User Icon - only shown when logged in */}
               {(() => {
                 const { user, loading } = useAuth();
-                if (loading) return null;
-                if (user) {
-                  return (
-                    <button
-                      onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
-                      className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs"
-                      title="Cerrar sesión"
-                    >
-                      <span className="text-emerald-400 truncate max-w-[60px]">{user.email.split('@')[0]}</span>
-                      <LogOut className="w-3 h-3 text-red-400" />
-                    </button>
-                  );
-                }
+                if (loading || !user) return null;
                 return (
-                  <a
-                    href="/login"
-                    className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs hover:bg-amber-500/20"
+                  <button
+                    onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}
+                    className="p-2 hover:bg-white/10 rounded-full"
+                    title={`${user.email} - Click para cerrar sesión`}
                   >
-                    <span className="text-amber-400">🎭 Demo</span>
-                  </a>
+                    <User className="w-5 h-5 text-emerald-400" />
+                  </button>
                 );
               })()}
               <button onClick={() => setShowHelp(true)} className="p-2 hover:bg-white/10 rounded-full">
