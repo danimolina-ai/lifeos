@@ -9,27 +9,41 @@ import { LogOut, User } from 'lucide-react'
 
 // Session indicator component
 function SessionIndicator() {
-    const { user } = useAuth()
+    const { user, loading } = useAuth()
 
     const handleLogout = async () => {
         await supabase.auth.signOut()
         window.location.reload()
     }
 
-    if (!user) return null
+    if (loading) return null
 
+    // User is logged in - show email and logout
+    if (user) {
+        return (
+            <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-emerald-500/10 backdrop-blur-sm border border-emerald-500/20 rounded-xl px-4 py-2">
+                <User className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm text-emerald-400">{user.email}</span>
+                <button
+                    onClick={handleLogout}
+                    className="ml-2 p-1.5 hover:bg-red-500/20 rounded-lg transition-colors"
+                    title="Cerrar sesión"
+                >
+                    <LogOut className="w-4 h-4 text-red-400" />
+                </button>
+            </div>
+        )
+    }
+
+    // User is NOT logged in - show demo mode indicator
     return (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-emerald-500/10 backdrop-blur-sm border border-emerald-500/20 rounded-xl px-4 py-2">
-            <User className="w-4 h-4 text-emerald-400" />
-            <span className="text-sm text-emerald-400">{user.email}</span>
-            <button
-                onClick={handleLogout}
-                className="ml-2 p-1.5 hover:bg-red-500/20 rounded-lg transition-colors"
-                title="Cerrar sesión"
-            >
-                <LogOut className="w-4 h-4 text-red-400" />
-            </button>
-        </div>
+        <a
+            href="/login"
+            className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-amber-500/10 backdrop-blur-sm border border-amber-500/20 rounded-xl px-4 py-2 hover:bg-amber-500/20 transition-colors"
+        >
+            <span className="text-sm text-amber-400 font-medium">🎭 Modo Demo</span>
+            <span className="text-xs text-amber-400/70">Click para login</span>
+        </a>
     )
 }
 
