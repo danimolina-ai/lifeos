@@ -46,14 +46,9 @@ function SessionIndicator() {
     )
 }
 
-// App wrapper with session indicator
+// App wrapper - just renders AppPage
 function AppWithSession() {
-    return (
-        <div className="relative">
-            <SessionIndicator />
-            <AppPage />
-        </div>
-    )
+    return <AppPage />
 }
 
 function App() {

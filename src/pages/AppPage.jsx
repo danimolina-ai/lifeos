@@ -3,6 +3,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Utensils, Dumbbell, Target, CheckSquare, Calendar, CalendarDays, BarChart3, Plus, ChevronLeft, ChevronRight, ChevronDown, Moon, Zap, Check, X, Flame, TrendingUp, Award, Coffee, Sun, Sunset, Edit3, Trash2, Play, Pause, RotateCcw, Settings, Sparkles, ArrowRight, RefreshCw, Timer, Trophy, Scale, BookOpen, Droplets, Brain, Clock, AlertCircle, Wallet, Grid, LayoutGrid, Briefcase, Activity, Camera, Search, MoreHorizontal, GripVertical, Star, Heart, Lightbulb, Copy, Users, Footprints, Smartphone, Watch } from 'lucide-react';
 import { FOOD_DATABASE, FOOD_CATEGORIES } from '../data/foodDatabase';
 import { EXERCISE_DATABASE, EQUIPMENT_TYPES, SET_TYPES, getExerciseById, getExercisesByMuscle, getAllExercises } from '../data/exerciseDatabase';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { LogOut, User } from 'lucide-react';
 
 
 // ============================================================================
@@ -7299,6 +7302,31 @@ const MealsScreen = ({ data, setData, showToast }) => {
               <p className="text-white/50 text-sm">{formatDate(today)}</p>
             </div>
             <div className="flex items-center gap-2">
+              {/* Session Indicator */}
+              {(() => {
+                const { user, loading } = useAuth();
+                if (loading) return null;
+                if (user) {
+                  return (
+                    <button
+                      onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
+                      className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs"
+                      title="Cerrar sesión"
+                    >
+                      <span className="text-emerald-400 truncate max-w-[60px]">{user.email.split('@')[0]}</span>
+                      <LogOut className="w-3 h-3 text-red-400" />
+                    </button>
+                  );
+                }
+                return (
+                  <a
+                    href="/login"
+                    className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs hover:bg-amber-500/20"
+                  >
+                    <span className="text-amber-400">🎭 Demo</span>
+                  </a>
+                );
+              })()}
               <button onClick={() => setShowHelp(true)} className="p-2 hover:bg-white/10 rounded-full">
                 <BookOpen className="w-5 h-5 text-white/50" />
               </button>
