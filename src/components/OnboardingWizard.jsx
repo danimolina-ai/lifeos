@@ -272,14 +272,15 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
     }
 
     const questionSteps = getQuestionSteps()
-    const totalSteps = 3 + questionSteps.length + 1 // welcome + name + areas + questions + mantra
+    const mantrasStepNumber = 3 + questionSteps.length // After welcome(0), name(1), areas(2), questions(3 to 3+n-1)
+    const totalSteps = mantrasStepNumber + 1 // Add 1 for the mantra step itself
 
     // Current state helpers
     const isWelcomeStep = step === 0
     const isNameStep = step === 1
     const isAreasStep = step === 2
-    const isMantrasStep = step === 2 + questionSteps.length + 1
-    const isQuestionStep = step >= 3 && step < 3 + questionSteps.length
+    const isQuestionStep = step >= 3 && step < mantrasStepNumber
+    const isMantrasStep = step === mantrasStepNumber
 
     const getCurrentQuestion = () => {
         if (!isQuestionStep) return null
@@ -391,8 +392,8 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
                         key={opt.value}
                         onClick={() => handleResponse(q.id, q.areaId, opt.value)}
                         className={`w-full p-4 rounded-2xl text-left transition-all ${current === opt.value
-                                ? 'bg-gradient-to-r ' + q.area.color + ' text-white shadow-lg scale-[1.02]'
-                                : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                            ? 'bg-gradient-to-r ' + q.area.color + ' text-white shadow-lg scale-[1.02]'
+                            : 'bg-white/5 border border-white/10 hover:bg-white/10'
                             }`}
                     >
                         <div className="font-medium">{opt.label}</div>
@@ -418,8 +419,8 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
                             handleResponse(q.id, q.areaId, newVal)
                         }}
                         className={`p-4 rounded-2xl text-center transition-all ${current.includes(opt.value)
-                                ? 'bg-gradient-to-r ' + q.area.color + ' text-white shadow-lg'
-                                : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                            ? 'bg-gradient-to-r ' + q.area.color + ' text-white shadow-lg'
+                            : 'bg-white/5 border border-white/10 hover:bg-white/10'
                             }`}
                     >
                         {opt.label}
@@ -550,8 +551,8 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
                                         key={areaId}
                                         onClick={() => toggleArea(areaId)}
                                         className={`p-4 rounded-2xl text-center transition-all ${isSelected
-                                                ? `bg-gradient-to-br ${area.color} shadow-lg scale-[1.02]`
-                                                : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                                            ? `bg-gradient-to-br ${area.color} shadow-lg scale-[1.02]`
+                                            : 'bg-white/5 border border-white/10 hover:bg-white/10'
                                             }`}
                                     >
                                         <div className="text-3xl mb-2">{area.emoji}</div>
@@ -617,8 +618,8 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
                                     key={m}
                                     onClick={() => setMantra(m)}
                                     className={`px-4 py-2 rounded-xl text-sm transition-all ${mantra === m
-                                            ? 'bg-violet-500 text-white'
-                                            : 'bg-white/5 text-white/60 hover:bg-white/10'
+                                        ? 'bg-violet-500 text-white'
+                                        : 'bg-white/5 text-white/60 hover:bg-white/10'
                                         }`}
                                 >
                                     {m}
@@ -650,8 +651,8 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
                                 onClick={handleNext}
                                 disabled={!canProceed()}
                                 className={`flex-1 py-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-all ${canProceed()
-                                        ? 'bg-violet-500 hover:bg-violet-600'
-                                        : 'bg-white/10 text-white/30 cursor-not-allowed'
+                                    ? 'bg-violet-500 hover:bg-violet-600'
+                                    : 'bg-white/10 text-white/30 cursor-not-allowed'
                                     }`}
                             >
                                 Siguiente <ArrowRight className="w-5 h-5" />
