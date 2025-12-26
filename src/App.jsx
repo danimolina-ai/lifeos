@@ -22,11 +22,28 @@ function UserAvatar() {
     const { user, loading } = useAuth()
     const [menuOpen, setMenuOpen] = useState(false)
 
+    // Get app data from localStorage
+    const getAppData = () => {
+        try {
+            const stored = localStorage.getItem('lifeOS_v56')
+            return stored ? JSON.parse(stored) : null
+        } catch { return null }
+    }
+
     if (loading || !user) return null
 
-    const initial = user.email.charAt(0).toUpperCase()
-    const username = user.email.split('@')[0]
-    const domain = user.email.split('@')[1]
+    const appData = getAppData()
+    const userData = appData?.user || {}
+
+    // User profile data
+    const displayName = userData.name || user.email.split('@')[0]
+    const initial = displayName.charAt(0).toUpperCase()
+    const mantra = userData.mantra || ''
+    const caloriesGoal = userData.goals?.calories || 2200
+    const proteinGoal = userData.goals?.protein || 180
+
+    // Member since
+    const memberSince = user.created_at ? new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'short' }) : null
 
     const handleLogout = async () => {
         await supabase.auth.signOut()
@@ -56,27 +73,45 @@ function UserAvatar() {
                     />
 
                     {/* Menu */}
-                    <div className="absolute right-0 top-12 z-50 w-72 bg-slate-800/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="absolute right-0 top-12 z-50 w-80 bg-slate-800/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
                         {/* User Info Header */}
                         <div className="p-4 border-b border-white/10 bg-gradient-to-br from-emerald-500/10 to-cyan-500/10">
                             <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white text-xl font-bold shadow-lg">
+                                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
                                     {initial}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-white font-semibold truncate">{username}</p>
+                                    <p className="text-white font-semibold text-lg truncate">{displayName}</p>
                                     <p className="text-white/50 text-xs truncate">{user.email}</p>
+                                    {memberSince && (
+                                        <p className="text-emerald-400/70 text-xs mt-0.5">Miembro desde {memberSince}</p>
+                                    )}
+                                </div>
+                            </div>
+                            {mantra && (
+                                <div className="mt-3 p-2 bg-white/5 rounded-xl">
+                                    <p className="text-white/40 text-xs mb-1">Tu mantra</p>
+                                    <p className="text-white/80 text-sm italic">"{mantra}"</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Quick Stats */}
+                        <div className="p-3 border-b border-white/5">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="p-2 bg-white/5 rounded-xl text-center">
+                                    <p className="text-orange-400 font-bold">{caloriesGoal}</p>
+                                    <p className="text-white/40 text-xs">kcal diarias</p>
+                                </div>
+                                <div className="p-2 bg-white/5 rounded-xl text-center">
+                                    <p className="text-cyan-400 font-bold">{proteinGoal}g</p>
+                                    <p className="text-white/40 text-xs">proteína</p>
                                 </div>
                             </div>
                         </div>
 
                         {/* Menu Items */}
                         <div className="p-2">
-                            {/* Account Info */}
-                            <div className="px-3 py-2 mb-1">
-                                <p className="text-white/40 text-xs font-medium uppercase tracking-wider">Cuenta</p>
-                            </div>
-
                             <button
                                 onClick={() => { window.dispatchEvent(new CustomEvent('goToSettings')); setMenuOpen(false); }}
                                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors text-left"
@@ -88,8 +123,8 @@ function UserAvatar() {
                                     </svg>
                                 </div>
                                 <div>
-                                    <p className="text-white text-sm font-medium">Configuración</p>
-                                    <p className="text-white/40 text-xs">Preferencias de la app</p>
+                                    <p className="text-white text-sm font-medium">Editar perfil</p>
+                                    <p className="text-white/40 text-xs">Nombre, objetivos, mantra</p>
                                 </div>
                             </button>
 
