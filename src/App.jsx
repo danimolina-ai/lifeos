@@ -32,7 +32,7 @@ function UserAvatar() {
     return (
         <button
             onClick={handleLogout}
-            className="fixed top-4 right-4 z-50 group"
+            className="fixed top-4 right-20 z-50 group"
             title={`${user.email} - Click para cerrar sesión`}
         >
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-emerald-500/30 ring-2 ring-white/20 group-hover:ring-white/50 group-hover:scale-105 transition-all">
