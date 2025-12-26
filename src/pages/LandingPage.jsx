@@ -2,6 +2,7 @@
 // "This is what I've been searching for my whole life"
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import SalesLayout from '../components/sales/SalesLayout'
 
 // Animated counter component
 const AnimatedCounter = ({ target, duration = 2000, suffix = '' }) => {
