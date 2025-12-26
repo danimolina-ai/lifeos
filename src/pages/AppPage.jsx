@@ -7306,13 +7306,17 @@ const MealsScreen = ({ data, setData, showToast }) => {
               {(() => {
                 const { user, loading } = useAuth();
                 if (loading || !user) return null;
+                const initial = user.email.charAt(0).toUpperCase();
                 return (
                   <button
                     onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}
-                    className="p-2 hover:bg-white/10 rounded-full"
+                    className="relative group"
                     title={`${user.email} - Click para cerrar sesión`}
                   >
-                    <User className="w-5 h-5 text-emerald-400" />
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-emerald-500/30 ring-2 ring-white/20 group-hover:ring-white/40 transition-all">
+                      {initial}
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-slate-900 animate-pulse" />
                   </button>
                 );
               })()}
