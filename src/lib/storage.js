@@ -43,16 +43,16 @@ const loadFromSupabase = async () => {
             .from('user_data')
             .select('data')
             .eq('user_id', currentUser.id)
-            .eq('key', 'lifeOS_v57')
+            .eq('key', 'lifeOS_v58')
             .single()
 
         if (data && !error) {
             // Save to localStorage (this won't trigger infinite loop because we check)
-            const currentData = localStorage.getItem('lifeOS_v57')
+            const currentData = localStorage.getItem('lifeOS_v58')
             const newData = JSON.stringify(data.data)
 
             if (currentData !== newData) {
-                localStorage.setItem('lifeOS_v57', newData)
+                localStorage.setItem('lifeOS_v58', newData)
                 // Reload page to sync UI with new data
                 window.location.reload()
             }
@@ -66,7 +66,7 @@ const loadFromSupabase = async () => {
 // Save to Supabase (debounced to avoid too many writes)
 let saveTimeout = null
 const saveToSupabase = async (key, value) => {
-    if (!currentUser || key !== 'lifeOS_v57') return
+    if (!currentUser || key !== 'lifeOS_v58') return
 
     // Clear previous timeout
     if (saveTimeout) clearTimeout(saveTimeout)
@@ -105,7 +105,7 @@ localStorage.setItem = function (key, value) {
     originalSetItem(key, value)
 
     // Also save to Supabase if user is logged in
-    if (currentUser && key === 'lifeOS_v57') {
+    if (currentUser && key === 'lifeOS_v58') {
         saveToSupabase(key, value)
     }
 }

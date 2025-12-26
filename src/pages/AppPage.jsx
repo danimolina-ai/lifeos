@@ -21975,7 +21975,7 @@ const SettingsScreen = ({ data, setData, showToast }) => {
   };
 
   const reset = () => {
-    localStorage.removeItem('lifeOS_v57');
+    localStorage.removeItem('lifeOS_v58');
     window.location.reload();
   };
 
@@ -22245,7 +22245,7 @@ const SettingsScreen = ({ data, setData, showToast }) => {
 // MAIN APP
 // ============================================================================// Main App Component
 export default function LifeOSApp() {
-  const [data, setData] = useLocalStorage('lifeOS_v57', EMPTY_DATA);
+  const [data, setData] = useLocalStorage('lifeOS_v58', EMPTY_DATA);
   const [screen, setScreen] = useState('today');
   const [toast, setToast] = useState(null);
 
@@ -22290,244 +22290,9 @@ export default function LifeOSApp() {
     return () => window.removeEventListener('toggleDemoData', handleToggleDemoData);
   }, [data, setData]);
 
-  // Migration: Initialize workTasks and workProjects if they don't exist
+  // Migration: Add new features to activeAreas if not present
   useEffect(() => {
-    const today = getToday();
-    let needsUpdate = false;
-    const updates = {};
-
-    if (!data.workProjects || data.workProjects.length === 0) {
-      needsUpdate = true;
-      updates.workProjects = [
-        {
-          id: 'wp1',
-          name: 'Lanzamiento Q1',
-          color: '#8B5CF6',
-          description: 'Nuevo producto para Q1',
-          objective: 'Lanzar MVP antes de marzo',
-          keyResults: [
-            { id: 'kr1', title: 'Completar desarrollo core', progress: 75 },
-            { id: 'kr2', title: '100 usuarios beta', progress: 40 },
-            { id: 'kr3', title: 'NPS > 50', progress: 0 }
-          ],
-          deadline: getDateOffset(today, 60),
-          status: 'active',
-          createdAt: getDateOffset(today, -30)
-        },
-        {
-          id: 'wp2',
-          name: 'Marketing',
-          color: '#EC4899',
-          description: 'Campañas de adquisición',
-          objective: 'Aumentar visibilidad de marca',
-          keyResults: [
-            { id: 'kr4', title: '10K seguidores nuevos', progress: 30 },
-            { id: 'kr5', title: '5 colaboraciones cerradas', progress: 60 }
-          ],
-          deadline: getDateOffset(today, 45),
-          status: 'active',
-          createdAt: getDateOffset(today, -15)
-        },
-        {
-          id: 'wp3',
-          name: 'Operaciones',
-          color: '#10B981',
-          description: 'Mejora de procesos internos',
-          objective: 'Optimizar eficiencia operativa',
-          keyResults: [],
-          deadline: '',
-          status: 'active',
-          createdAt: getDateOffset(today, -20)
-        }
-      ];
-    }
-
-    if (!data.workTasks || data.workTasks.length === 0) {
-      needsUpdate = true;
-      updates.workTasks = [
-        {
-          id: 'wt1',
-          title: 'Revisar propuesta cliente VIP',
-          description: 'Propuesta de 50K pendiente de revisión',
-          project_id: 'wp1',
-          priority: 'high',
-          eisenhower: 'q1',
-          energy: 'high',
-          timeEstimate: 60,
-          dueDate: today,
-          scheduledDate: today,
-          context: '@office',
-          isDeepWork: true,
-          completed: false,
-          createdAt: getDateOffset(today, -2),
-          status: 'todo'
-        },
-        {
-          id: 'wt2',
-          title: 'Preparar presentación board',
-          description: 'Reunión mañana a las 10:00',
-          project_id: 'wp1',
-          priority: 'high',
-          eisenhower: 'q1',
-          energy: 'high',
-          timeEstimate: 90,
-          dueDate: today,
-          scheduledDate: today,
-          context: '@office',
-          isDeepWork: true,
-          completed: false,
-          createdAt: getDateOffset(today, -1),
-          status: 'in_progress'
-        },
-        {
-          id: 'wt3',
-          title: 'Escribir documentación API',
-          description: 'Endpoints v2 sin documentar',
-          project_id: 'wp1',
-          priority: 'medium',
-          eisenhower: 'q2',
-          energy: 'high',
-          timeEstimate: 120,
-          dueDate: getDateOffset(today, 3),
-          scheduledDate: today,
-          context: '@computer',
-          isDeepWork: true,
-          completed: false,
-          createdAt: getDateOffset(today, -5),
-          status: 'todo'
-        },
-        {
-          id: 'wt4',
-          title: 'Diseñar landing page',
-          description: 'Nueva campaña de captación',
-          project_id: 'wp2',
-          priority: 'medium',
-          eisenhower: 'q2',
-          energy: 'medium',
-          timeEstimate: 90,
-          dueDate: getDateOffset(today, 5),
-          scheduledDate: today,
-          context: '@computer',
-          isDeepWork: true,
-          completed: false,
-          createdAt: getDateOffset(today, -3),
-          status: 'todo'
-        },
-        {
-          id: 'wt5',
-          title: 'Planificar estrategia Q2',
-          description: 'Roadmap y objetivos',
-          project_id: 'wp3',
-          priority: 'medium',
-          eisenhower: 'q2',
-          energy: 'high',
-          timeEstimate: 60,
-          dueDate: getDateOffset(today, 7),
-          scheduledDate: '',
-          context: '@office',
-          isDeepWork: true,
-          completed: false,
-          createdAt: getDateOffset(today, -2),
-          status: 'backlog'
-        },
-        {
-          id: 'wt6',
-          title: 'Responder emails pendientes',
-          description: '15 emails sin responder',
-          project_id: '',
-          priority: 'low',
-          eisenhower: 'q3',
-          energy: 'low',
-          timeEstimate: 30,
-          dueDate: today,
-          scheduledDate: today,
-          context: '@computer',
-          isDeepWork: false,
-          completed: false,
-          createdAt: today,
-          status: 'todo'
-        },
-        {
-          id: 'wt7',
-          title: 'Configurar analytics',
-          description: 'Google Analytics 4',
-          project_id: 'wp2',
-          priority: 'medium',
-          eisenhower: 'q2',
-          energy: 'medium',
-          timeEstimate: 45,
-          dueDate: today,
-          scheduledDate: today,
-          context: '@computer',
-          isDeepWork: false,
-          completed: true,
-          completedAt: new Date().toISOString(),
-          createdAt: getDateOffset(today, -1),
-          status: 'done'
-        },
-        {
-          id: 'wt8',
-          title: 'Revisión código PR #234',
-          description: 'Feature de pagos',
-          project_id: 'wp1',
-          priority: 'high',
-          eisenhower: 'q1',
-          energy: 'high',
-          timeEstimate: 30,
-          dueDate: today,
-          scheduledDate: today,
-          context: '@computer',
-          isDeepWork: true,
-          completed: true,
-          completedAt: new Date().toISOString(),
-          actualTime: 25,
-          createdAt: getDateOffset(today, -1),
-          status: 'done'
-        },
-        {
-          id: 'wt9',
-          title: 'Llamar a proveedor hosting',
-          description: '',
-          project_id: '',
-          priority: 'medium',
-          eisenhower: 'q2',
-          energy: 'low',
-          timeEstimate: 15,
-          dueDate: '',
-          scheduledDate: '',
-          context: '',
-          isDeepWork: false,
-          completed: false,
-          inInbox: true,
-          createdAt: today,
-          status: 'backlog'
-        },
-        {
-          id: 'wt10',
-          title: 'Investigar competencia',
-          description: '',
-          project_id: '',
-          priority: 'medium',
-          eisenhower: 'q2',
-          energy: 'medium',
-          timeEstimate: 60,
-          dueDate: '',
-          scheduledDate: '',
-          context: '',
-          isDeepWork: false,
-          completed: false,
-          inInbox: true,
-          createdAt: getDateOffset(today, -1),
-          status: 'backlog'
-        }
-      ];
-    }
-
-    if (needsUpdate) {
-      setData(prev => ({ ...prev, ...updates }));
-    }
-
-    // Migration: Add 'consciousness' to activeAreas if not present
+    // Add 'consciousness' to activeAreas if not present
     if (data.user?.activeAreas && !data.user.activeAreas.includes('consciousness')) {
       setData(prev => ({
         ...prev,
@@ -22538,7 +22303,7 @@ export default function LifeOSApp() {
       }));
     }
 
-    // Migration: Add 'personal' to activeAreas if not present
+    // Add 'personal' to activeAreas if not present
     if (data.user?.activeAreas && !data.user.activeAreas.includes('personal')) {
       setData(prev => ({
         ...prev,
@@ -22550,7 +22315,7 @@ export default function LifeOSApp() {
       }));
     }
 
-    // Migration: Add 'relationships' to activeAreas and initialize data if not present
+    // Add 'relationships' to activeAreas if not present
     if (data.user?.activeAreas && !data.user.activeAreas.includes('relationships')) {
       setData(prev => ({
         ...prev,
@@ -22561,54 +22326,11 @@ export default function LifeOSApp() {
       }));
     }
 
-    // Migration: Initialize relationships array if not present
+    // Initialize empty arrays if not present (no demo data)
     if (!data.relationships) {
-      setData(prev => ({
-        ...prev,
-        relationships: [
-          {
-            id: 'rel-example',
-            name: 'Ejemplo - Añade tus contactos',
-            category: 'friends',
-            loveLanguage: 'time',
-            contactFrequency: 'weekly',
-            birthday: '',
-            anniversary: '',
-            notes: 'Este es un ejemplo. Puedes eliminarlo y añadir tus propios contactos.',
-            interests: '',
-            pendingTopics: '',
-            healthRating: 3,
-            interactions: [],
-            createdAt: new Date().toISOString()
-          }
-        ]
-      }));
+      setData(prev => ({ ...prev, relationships: [] }));
     }
 
-    // Migration: Update existing relationships to new format
-    if (data.relationships && data.relationships.some(r => r.category === 'close_friend' || r.loveLanguage === 'quality_time' || r.loveLanguage === 'acts_of_service' || !r.hasOwnProperty('interactions'))) {
-      setData(prev => ({
-        ...prev,
-        relationships: prev.relationships.map(r => ({
-          ...r,
-          // Fix category names
-          category: r.category === 'close_friend' ? 'friends' : r.category,
-          // Fix love language names
-          loveLanguage: r.loveLanguage === 'quality_time' ? 'time' :
-            r.loveLanguage === 'acts_of_service' ? 'service' :
-              r.loveLanguage === 'physical' ? 'touch' : r.loveLanguage,
-          // Ensure new fields exist
-          anniversary: r.anniversary || '',
-          interests: r.interests || '',
-          pendingTopics: r.pendingTopics || '',
-          healthRating: r.healthRating || r.health || 3,
-          interactions: r.interactions || [],
-          createdAt: r.createdAt || new Date().toISOString()
-        }))
-      }));
-    }
-
-    // Migration: Initialize personalCategories if not present
     if (!data.personalCategories) {
       setData(prev => ({
         ...prev,
@@ -22624,7 +22346,7 @@ export default function LifeOSApp() {
       }));
     }
 
-    // Migration: Add subtasks to existing personalTasks if not present
+    // Add subtasks to existing personalTasks if not present
     if (data.personalTasks && data.personalTasks.some(t => !t.subtasks)) {
       setData(prev => ({
         ...prev,
