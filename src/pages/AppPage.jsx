@@ -6131,14 +6131,14 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                     </button>
                   </div>
 
-                  <div className="space-y-1 overflow-x-auto">
+                  <div className="space-y-1.5 overflow-x-auto">
                     {monthData.map((month, i) => {
                       const isCurrentMonth = i === currentMonth;
                       const isViewingMonth = i === viewingMonth;
 
                       return (
-                        <div key={i} className="flex items-center gap-1.5">
-                          <span className={`text-[10px] w-7 flex-shrink-0 ${isCurrentMonth ? 'text-violet-400 font-bold' : isViewingMonth ? 'text-white font-medium' : 'text-white/40'}`}>
+                        <div key={i} className="flex items-center gap-2">
+                          <span className={`text-[11px] w-8 flex-shrink-0 ${isCurrentMonth ? 'text-violet-400 font-bold' : isViewingMonth ? 'text-white font-medium' : 'text-white/50'}`}>
                             {month.name}
                           </span>
                           <div className="flex items-center gap-[2px] flex-shrink-0">
@@ -6151,8 +6151,8 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                   key={di}
                                   onClick={() => setViewDate(day.date)}
                                   style={{
-                                    width: '5px',
-                                    height: '5px',
+                                    width: '6px',
+                                    height: '6px',
                                     borderRadius: '50%',
                                     backgroundColor: day.isFuture ? '#6b7280' : !day.hasData ? '#9ca3af' : undefined,
                                     boxShadow: isViewing ? '0 0 0 1.5px white' : isToday ? '0 0 0 1.5px #a78bfa' : undefined
@@ -6164,7 +6164,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                               );
                             })}
                           </div>
-                          <span className={`text-[9px] ml-auto flex-shrink-0 ${month.avgScore >= 70 ? 'text-emerald-400' :
+                          <span className={`text-[11px] ml-auto flex-shrink-0 font-medium ${month.avgScore >= 70 ? 'text-emerald-400' :
                             month.avgScore >= 50 ? 'text-amber-400' :
                               month.avgScore > 0 ? 'text-red-400' : 'text-white/30'
                             }`}>
