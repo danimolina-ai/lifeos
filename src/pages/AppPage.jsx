@@ -22194,11 +22194,6 @@ export default function LifeOSApp() {
   const [screen, setScreen] = useState('today');
   const [toast, setToast] = useState(null);
 
-  // Use Supabase data if available, otherwise use localStorage
-  const usingSupabase = !!supabaseData;
-  const selectedDate = supabaseData?.selectedDate || getToday();
-  const setSelectedDate = supabaseData?.setSelectedDate || (() => { });
-
   // Migration: Initialize workTasks and workProjects if they don't exist
   useEffect(() => {
     const today = getToday();
