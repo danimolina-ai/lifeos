@@ -22215,6 +22215,13 @@ export default function LifeOSApp() {
   const [screen, setScreen] = useState('today');
   const [toast, setToast] = useState(null);
 
+  // Listen for goToSettings event from global header
+  useEffect(() => {
+    const handleGoToSettings = () => setScreen('settings');
+    window.addEventListener('goToSettings', handleGoToSettings);
+    return () => window.removeEventListener('goToSettings', handleGoToSettings);
+  }, []);
+
   // Migration: Initialize workTasks and workProjects if they don't exist
   useEffect(() => {
     const today = getToday();
@@ -22641,13 +22648,7 @@ export default function LifeOSApp() {
       {/* Background gradient */}
       <div className="fixed inset-0 bg-gradient-to-br from-violet-950/50 via-zinc-950 to-fuchsia-950/30 pointer-events-none" />
 
-      {/* Settings button - top right */}
-      <button
-        onClick={() => setScreen('settings')}
-        className={`fixed top-4 right-4 z-50 p-2.5 rounded-xl transition-all ${screen === 'settings' ? 'bg-violet-500' : 'bg-white/10 hover:bg-white/20'}`}
-      >
-        <Settings className="w-5 h-5" />
-      </button>
+      {/* Settings button - moved to global header, keeping this hidden */}
 
       {/* Toast */}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
