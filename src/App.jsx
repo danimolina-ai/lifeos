@@ -21,15 +21,15 @@ function SessionIndicator() {
     // User is logged in - show email and logout
     if (user) {
         return (
-            <div className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-emerald-500/10 backdrop-blur-sm border border-emerald-500/20 rounded-xl px-4 py-2">
-                <User className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm text-emerald-400">{user.email}</span>
+            <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-emerald-500/10 backdrop-blur-sm border border-emerald-500/20 rounded-xl px-3 py-1.5 text-xs sm:text-sm sm:px-4 sm:py-2">
+                <User className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
+                <span className="text-emerald-400 truncate max-w-[120px] sm:max-w-none">{user.email}</span>
                 <button
                     onClick={handleLogout}
-                    className="ml-2 p-1.5 hover:bg-red-500/20 rounded-lg transition-colors"
+                    className="p-1 sm:p-1.5 hover:bg-red-500/20 rounded-lg transition-colors"
                     title="Cerrar sesión"
                 >
-                    <LogOut className="w-4 h-4 text-red-400" />
+                    <LogOut className="w-3 h-3 sm:w-4 sm:h-4 text-red-400" />
                 </button>
             </div>
         )
@@ -39,10 +39,10 @@ function SessionIndicator() {
     return (
         <a
             href="/login"
-            className="fixed top-4 right-4 z-50 flex items-center gap-2 bg-amber-500/10 backdrop-blur-sm border border-amber-500/20 rounded-xl px-4 py-2 hover:bg-amber-500/20 transition-colors"
+            className="fixed top-2 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-amber-500/10 backdrop-blur-sm border border-amber-500/20 rounded-xl px-3 py-1.5 hover:bg-amber-500/20 transition-colors"
         >
-            <span className="text-sm text-amber-400 font-medium">🎭 Modo Demo</span>
-            <span className="text-xs text-amber-400/70">Click para login</span>
+            <span className="text-xs sm:text-sm text-amber-400 font-medium">🎭 Demo</span>
+            <span className="text-xs text-amber-400/70 hidden sm:inline">Click para login</span>
         </a>
     )
 }
