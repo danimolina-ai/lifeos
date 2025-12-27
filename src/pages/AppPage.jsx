@@ -2128,8 +2128,179 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
     ex.sets.some(s => !s.completed)
   );
 
-  // Insights
+  // ========================================================================
+  // TIER 3: CORRELATION ENGINE - Cross-Area Insights
+  // ========================================================================
+  const getCorrelations = useMemo(() => {
+    const correlations = [];
+    const last14Days = Array.from({ length: 14 }, (_, i) => getDateOffset(getToday(), -i));
+
+    // Helper: Get average for a metric over days
+    const getAverageForDays = (days, getter) => {
+      const values = days.map(d => getter(d)).filter(v => v !== null && v !== undefined && !isNaN(v));
+      return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+    };
+
+    // 3.1 SLEEP → ENERGY correlation
+    const todaySleep = dayData?.sleep_hours;
+    const todayEnergy = dayData?.energy_level;
+    if (todaySleep && todayEnergy !== undefined) {
+      const avgEnergy = getAverageForDays(last14Days, d => data.days[d]?.energy_level);
+      const avgSleep = getAverageForDays(last14Days, d => data.days[d]?.sleep_hours);
+
+      if (avgEnergy && avgSleep) {
+        if (todaySleep >= 7 && todayEnergy > avgEnergy) {
+          correlations.push({
+            id: 'sleep-energy-good',
+            icon: '😴→⚡',
+            text: `Dormiste ${todaySleep}h → Tu energía es ${Math.round((todayEnergy / avgEnergy - 1) * 100)}% mayor que tu media`,
+            type: 'success',
+            area: 'sleep'
+          });
+        } else if (todaySleep < 6 && avgSleep >= 7) {
+          correlations.push({
+            id: 'sleep-energy-bad',
+            icon: '⚠️💤',
+            text: `Solo ${todaySleep}h de sueño (tu media es ${avgSleep.toFixed(1)}h). Espera menos energía hoy`,
+            type: 'warning',
+            area: 'sleep'
+          });
+        }
+      }
+    }
+
+    // 3.2 HABITS → Score/Momentum
+    if (habitLogs.length > 0 && data.habits.length > 0) {
+      const last7Completion = last14Days.slice(0, 7).map(d => {
+        const dayLogs = data.habitLogs.filter(l => l.date === d && l.completed);
+        return data.habits.length > 0 ? dayLogs.length / data.habits.length : 0;
+      });
+      const weeklyAvg = last7Completion.reduce((a, b) => a + b, 0) / 7;
+      const todayRate = habitLogs.filter(h => h.completed).length / data.habits.length;
+
+      if (weeklyAvg >= 0.8) {
+        correlations.push({
+          id: 'habits-streak',
+          icon: '🔥',
+          text: `¡${Math.round(weeklyAvg * 100)}% esta semana! Tu consistencia impulsa resultados`,
+          type: 'success',
+          area: 'habits'
+        });
+      } else if (todayRate > weeklyAvg + 0.2 && todayRate >= 0.5) {
+        correlations.push({
+          id: 'habits-improving',
+          icon: '📈',
+          text: `Hoy llevas ${Math.round(todayRate * 100)}% vs ${Math.round(weeklyAvg * 100)}% de media. ¡Sigue así!`,
+          type: 'success',
+          area: 'habits'
+        });
+      }
+    }
+
+    // 3.3 CALORIES → Weight trend
+    const bodyMetrics = data.bodyMetrics || [];
+    if (dayMeals.length > 0 && bodyMetrics.length >= 2 && data.user.goals?.calories) {
+      const totalCals = dayMeals.reduce((s, m) => s + (m.calories || 0), 0);
+      const calGoal = data.user.goals.calories;
+      const sortedMetrics = [...bodyMetrics].sort((a, b) => a.date.localeCompare(b.date));
+      const recentWeight = sortedMetrics[sortedMetrics.length - 1];
+      const olderWeight = sortedMetrics[sortedMetrics.length - 2];
+
+      if (recentWeight && olderWeight) {
+        const weightChange = recentWeight.weight - olderWeight.weight;
+        const daysBetween = Math.max(1, Math.abs((new Date(recentWeight.date) - new Date(olderWeight.date)) / (1000 * 60 * 60 * 24)));
+
+        if (totalCals < calGoal * 0.85 && weightChange < 0) {
+          correlations.push({
+            id: 'cal-weight-deficit',
+            icon: '📉',
+            text: `Déficit calórico (${totalCals}/${calGoal}) → ${Math.abs(weightChange).toFixed(1)}kg perdidos en ${Math.round(daysBetween)} días`,
+            type: 'info',
+            area: 'nutrition'
+          });
+        } else if (totalCals > calGoal * 1.15 && weightChange > 0) {
+          correlations.push({
+            id: 'cal-weight-surplus',
+            icon: '📊',
+            text: `Superávit calórico → +${weightChange.toFixed(1)}kg en ${Math.round(daysBetween)} días`,
+            type: 'warning',
+            area: 'nutrition'
+          });
+        }
+      }
+    }
+
+    // 3.4 MEDITATION/CONSCIOUSNESS → Sleep quality
+    const yesterdayDate = getDateOffset(viewDate, -1);
+    const yesterdayData = data.days[yesterdayDate];
+    if (yesterdayData?.meditation_done && todaySleep) {
+      const avgSleep = getAverageForDays(last14Days, d => data.days[d]?.sleep_hours);
+      if (avgSleep && todaySleep > avgSleep) {
+        correlations.push({
+          id: 'meditation-sleep',
+          icon: '🧘→😴',
+          text: `Meditaste ayer → ${todaySleep}h de sueño (+${(todaySleep - avgSleep).toFixed(1)}h vs tu media)`,
+          type: 'success',
+          area: 'consciousness'
+        });
+      }
+    }
+
+    // 3.5 WORKOUT → Next day energy
+    const yesterdayWorkout = data.workouts?.find(w => w.day_id === yesterdayDate && w.is_completed);
+    if (yesterdayWorkout && todayEnergy) {
+      const avgEnergy = getAverageForDays(last14Days, d => data.days[d]?.energy_level);
+      if (avgEnergy && todayEnergy >= avgEnergy) {
+        correlations.push({
+          id: 'workout-energy',
+          icon: '💪→⚡',
+          text: `Entrenaste ayer → Energía ${todayEnergy > avgEnergy ? 'por encima de' : 'igual a'} tu media`,
+          type: 'success',
+          area: 'workout'
+        });
+      }
+    }
+
+    // 3.6 RELATIONSHIPS → Mood (social health)
+    const relationships = data.relationships || [];
+    const recentInteractions = relationships.reduce((count, rel) => {
+      const recent = (rel.interactions || []).filter(i => {
+        const daysDiff = (new Date(getToday()) - new Date(i.date)) / (1000 * 60 * 60 * 24);
+        return daysDiff <= 7;
+      });
+      return count + recent.length;
+    }, 0);
+
+    if (recentInteractions >= 5 && todayEnergy && todayEnergy >= 3) {
+      correlations.push({
+        id: 'relationships-mood',
+        icon: '👥→😊',
+        text: `${recentInteractions} interacciones esta semana → Bienestar social alto`,
+        type: 'success',
+        area: 'relationships'
+      });
+    } else if (recentInteractions === 0 && relationships.length > 0) {
+      const needsAttention = relationships.filter(r => r.contactFrequency && r.interactions?.length === 0).length;
+      if (needsAttention > 0) {
+        correlations.push({
+          id: 'relationships-neglected',
+          icon: '👥⚠️',
+          text: `${needsAttention} relaciones sin contacto reciente. ¿Tiempo para conectar?`,
+          type: 'warning',
+          area: 'relationships'
+        });
+      }
+    }
+
+    return correlations;
+  }, [data, dayData, dayMeals, habitLogs, viewDate]);
+
+  // Legacy getInsight for compatibility (now uses correlations)
   const getInsight = () => {
+    if (getCorrelations.length > 0) {
+      return getCorrelations[0]; // Return first correlation as primary insight
+    }
+    // Fallback to old logic
     if (dayData.sleep_hours >= 7 && habitsCompleted >= data.habits.length * 0.8) {
       return { text: "Gran día! Buen descanso + hábitos = éxito asegurado 🚀", type: "success" };
     }
@@ -4618,8 +4789,44 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
             </AnimatedMount>
           )}
 
-          {/* Insight */}
-          {insight && (
+          {/* TIER 3: Correlations / Cross-Area Insights */}
+          {getCorrelations.length > 0 && (
+            <AnimatedMount delay={175}>
+              <Card className="bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5 border-violet-500/20">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-violet-400" />
+                    <span className="text-xs font-medium text-violet-300">Conexiones detectadas</span>
+                  </div>
+                  <span className="text-xs text-white/30">{getCorrelations.length} insight{getCorrelations.length > 1 ? 's' : ''}</span>
+                </div>
+                <div className="space-y-2">
+                  {getCorrelations.slice(0, 3).map((corr, idx) => (
+                    <div
+                      key={corr.id}
+                      className={`flex items-start gap-3 p-2 rounded-lg ${corr.type === 'success' ? 'bg-emerald-500/10' :
+                          corr.type === 'warning' ? 'bg-amber-500/10' :
+                            'bg-blue-500/10'
+                        }`}
+                    >
+                      <span className="text-lg flex-shrink-0">{corr.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white/80">{corr.text}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {getCorrelations.length > 3 && (
+                    <p className="text-xs text-white/30 text-center pt-1">
+                      +{getCorrelations.length - 3} más...
+                    </p>
+                  )}
+                </div>
+              </Card>
+            </AnimatedMount>
+          )}
+
+          {/* Fallback: Single insight if no correlations */}
+          {getCorrelations.length === 0 && insight && (
             <AnimatedMount delay={175}>
               <Card className={`
             ${insight.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20' : ''}
