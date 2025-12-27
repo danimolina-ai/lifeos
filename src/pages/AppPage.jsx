@@ -1748,6 +1748,9 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
   // Notifications state - track dismissed notifications for this session
   const [dismissedNotifications, setDismissedNotifications] = useState(new Set());
 
+  // Template selection modal state
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+
   const today = getToday();
   const isViewingToday = viewDate === today;
 
@@ -3576,18 +3579,11 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                               Entreno libre
                             </button>
                             <button
-                              onClick={() => setScreen('workout')}
+                              onClick={() => setShowTemplateModal(true)}
                               className="px-4 py-2.5 bg-white/10 rounded-xl font-medium inline-flex items-center gap-2 hover:bg-white/20"
                             >
                               <Dumbbell className="w-4 h-4" />
                               Usar plantilla
-                            </button>
-                            <button
-                              onClick={() => setScreen('workout')}
-                              className="px-4 py-2.5 bg-white/10 rounded-xl font-medium inline-flex items-center gap-2 hover:bg-white/20"
-                            >
-                              <Plus className="w-4 h-4" />
-                              Crear plantilla
                             </button>
                           </div>
                         </div>
@@ -12147,6 +12143,92 @@ const WorkScreen = ({ data, setData, showToast }) => {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Template Selection Modal */}
+      <Modal isOpen={showTemplateModal} onClose={() => setShowTemplateModal(false)} title="Seleccionar Plantilla">
+        <div className="space-y-4">
+          {/* Available templates */}
+          {(data.workoutRoutines?.length > 0 || data.workoutTemplates?.length > 0) ? (
+            <div className="space-y-2">
+              <p className="text-sm text-white/50 mb-3">Elige una rutina para empezar:</p>
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {/* Use routines if available, otherwise use templates */}
+                {(data.workoutRoutines?.length > 0 ? data.workoutRoutines : data.workoutTemplates || []).map(routine => (
+                  <button
+                    key={routine.id}
+                    onClick={() => {
+                      // Create workout from routine/template
+                      const newWorkout = {
+                        id: `workout-${Date.now()}`,
+                        day_id: viewDate,
+                        name: routine.name,
+                        started_at: new Date().toISOString(),
+                        is_completed: false,
+                        templateId: routine.id,
+                        exercises: (routine.exercises || []).map(e => ({
+                          id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                          exerciseId: e.exerciseId || e.id,
+                          name: e.name || 'Ejercicio',
+                          targetSets: e.sets || e.targetSets || 3,
+                          targetReps: e.reps || e.targetReps || '8',
+                          restSeconds: e.restSeconds || 90,
+                          notes: e.notes || '',
+                          sets: Array.from({ length: e.sets || e.targetSets || 3 }, () => ({
+                            id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                            weight: null,
+                            reps: null,
+                            rpe: null,
+                            setType: 'normal',
+                            completed: false
+                          }))
+                        }))
+                      };
+                      setData(prev => ({
+                        ...prev,
+                        workouts: [...(prev.workouts || []), newWorkout]
+                      }));
+                      setShowTemplateModal(false);
+                      showToast(`${routine.name} iniciado 💪`);
+                    }}
+                    className="w-full p-4 bg-white/10 hover:bg-white/20 rounded-xl text-left transition-all flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-violet-500/20 rounded-lg flex items-center justify-center">
+                        <Dumbbell className="w-5 h-5 text-violet-400" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{routine.name}</p>
+                        <p className="text-xs text-white/50">{routine.exercises?.length || 0} ejercicios</p>
+                      </div>
+                    </div>
+                    <Play className="w-5 h-5 text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <Dumbbell className="w-12 h-12 mx-auto text-white/20 mb-3" />
+              <p className="text-white/50">No tienes plantillas creadas</p>
+              <p className="text-sm text-white/30 mt-1">Crea tu primera plantilla para empezar más rápido</p>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div className="border-t border-white/10 pt-4">
+            <button
+              onClick={() => {
+                setShowTemplateModal(false);
+                setScreen('workout');
+              }}
+              className="w-full py-3 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold flex items-center justify-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              Crear nueva plantilla
+            </button>
           </div>
         </div>
       </Modal>
