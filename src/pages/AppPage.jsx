@@ -3582,6 +3582,13 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                               <Dumbbell className="w-4 h-4" />
                               Usar plantilla
                             </button>
+                            <button
+                              onClick={() => setScreen('workout')}
+                              className="px-4 py-2.5 bg-white/10 rounded-xl font-medium inline-flex items-center gap-2 hover:bg-white/20"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Crear plantilla
+                            </button>
                           </div>
                         </div>
                       )}
