@@ -3498,11 +3498,11 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                       <p className="text-white/50 mb-4">Sin entreno programado para hoy</p>
 
                       {/* Show available templates if any exist */}
-                      {data.workoutTemplates && data.workoutTemplates.length > 0 ? (
+                      {((data.workoutTemplates && data.workoutTemplates.length > 0) || (data.workoutRoutines && data.workoutRoutines.length > 0)) ? (
                         <div className="space-y-3">
                           <p className="text-white/40 text-sm">Elige una plantilla:</p>
                           <div className="flex flex-wrap gap-2 justify-center">
-                            {data.workoutTemplates.slice(0, 3).map(template => (
+                            {(data.workoutRoutines?.length > 0 ? data.workoutRoutines : data.workoutTemplates || []).slice(0, 3).map(template => (
                               <button
                                 key={template.id}
                                 onClick={() => {
@@ -3534,7 +3534,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                   };
                                   setData(prev => ({
                                     ...prev,
-                                    workouts: [...prev.workouts, newWorkout]
+                                    workouts: [...(prev.workouts || []), newWorkout]
                                   }));
                                   showToast(`${template.name} iniciado 💪`);
                                 }}
@@ -3545,12 +3545,34 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                               </button>
                             ))}
                           </div>
-                          <button
-                            onClick={() => setScreen('workout')}
-                            className="mt-2 px-4 py-2 text-white/40 text-sm hover:text-white/60 inline-flex items-center gap-1"
-                          >
-                            Ver todas las plantillas <ArrowRight className="w-3 h-3" />
-                          </button>
+                          <div className="flex gap-2 justify-center mt-2">
+                            <button
+                              onClick={() => setShowTemplateModal(true)}
+                              className="px-4 py-2 text-violet-400 text-sm hover:text-violet-300 inline-flex items-center gap-1"
+                            >
+                              Ver todas <ArrowRight className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const newWorkout = {
+                                  id: `workout-${Date.now()}`,
+                                  day_id: viewDate,
+                                  name: 'Entreno libre',
+                                  started_at: new Date().toISOString(),
+                                  is_completed: false,
+                                  exercises: []
+                                };
+                                setData(prev => ({
+                                  ...prev,
+                                  workouts: [...(prev.workouts || []), newWorkout]
+                                }));
+                                showToast('Entreno iniciado 💪');
+                              }}
+                              className="px-4 py-2 text-white/40 text-sm hover:text-white/60 inline-flex items-center gap-1"
+                            >
+                              <Play className="w-3 h-3" /> Entreno libre
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-3">
