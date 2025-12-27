@@ -49,7 +49,13 @@ const EMPTY_DATA = {
   personalTasks: [],
   personalCategories: [],
   relationships: [],
-  finances: { transactions: [], monthlyBudget: 0 }
+  finances: { transactions: [], monthlyBudget: 0 },
+  // TIER 1 fixes - previously missing fields
+  workTasks: [],
+  workProjects: [],
+  scheduledWorkouts: {},
+  recurringWorkouts: {},
+  goals: { annual: [], quarterly: [], monthly: [] }
 };
 
 // Demo data for demonstration purposes (used when toggle is ON)
@@ -853,6 +859,14 @@ const calculateDayScore = (dayData, habitLogs, meals, tasks, workout, goals) => 
       const total = workout.exercises?.reduce((s, e) => s + e.sets.length, 0) || 1;
       score += Math.round((done / total) * 5);
     }
+  }
+
+  // Consciousness / Mindfulness (10 points) - TIER 1 fix
+  // Gratitude (5 points) + Journaling/Meditation (5 points)
+  if (dayData) {
+    max += 10;
+    if (dayData.gratitude && dayData.gratitude.length > 0) score += 5;
+    if (dayData.journalEntry || dayData.meditation_done || dayData.breathing_done) score += 5;
   }
 
   return max > 0 ? Math.round((score / max) * 100) : 0;
@@ -9381,7 +9395,7 @@ const HabitsScreen = ({ data, setData, showToast }) => {
     }
   ];
 
-  const activeAreas = data.user?.activeAreas || ['nutrition', 'workout', 'habits', 'work', 'body', 'finances'];
+  const activeAreas = data.user?.activeAreas || ['nutrition', 'workout', 'habits', 'work', 'personal', 'body', 'finances', 'consciousness', 'relationships'];
   const visibleMetaHabits = metaHabits.filter(m =>
     (m.type === 'nutrition' && activeAreas.includes('nutrition')) ||
     (m.type === 'workout' && activeAreas.includes('workout')) ||
