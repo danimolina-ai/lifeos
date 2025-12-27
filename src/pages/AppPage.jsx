@@ -12290,7 +12290,7 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
 
   // Get exercise history
   const getExerciseHistory = (exerciseId) => {
-    return data.workouts
+    return (data.workouts || [])
       .filter(w => w.is_completed)
       .map(w => {
         const ex = w.exercises?.find(e => e.exerciseId === exerciseId);
@@ -22586,8 +22586,8 @@ export default function LifeOSApp() {
     workTasks: rawData?.workTasks || [],
     workProjects: rawData?.workProjects || [],
     days: rawData?.days || {},
-    scheduledWorkouts: rawData?.scheduledWorkouts || {},
-    recurringWorkouts: rawData?.recurringWorkouts || {},
+    scheduledWorkouts: Array.isArray(rawData?.scheduledWorkouts) ? rawData.scheduledWorkouts : [],
+    recurringWorkouts: Array.isArray(rawData?.recurringWorkouts) ? rawData.recurringWorkouts : [],
     finances: { transactions: [], monthlyBudget: 0, ...(rawData?.finances || {}) },
     goals: { annual: [], quarterly: [], monthly: [], ...(rawData?.goals || {}) }
   }), [rawData]);
