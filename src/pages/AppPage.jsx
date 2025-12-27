@@ -3550,21 +3550,39 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex gap-2 justify-center">
-                          <button
-                            onClick={() => setScreen('workout')}
-                            className="px-4 py-2.5 bg-violet-500 rounded-xl font-medium inline-flex items-center gap-2"
-                          >
-                            <Plus className="w-4 h-4" />
-                            Crear plantilla
-                          </button>
-                          <button
-                            onClick={() => setScreen('workout')}
-                            className="px-4 py-2.5 bg-white/10 rounded-xl font-medium inline-flex items-center gap-2 hover:bg-white/20"
-                          >
-                            <Dumbbell className="w-4 h-4" />
-                            Entreno libre
-                          </button>
+                        <div className="space-y-3">
+                          <p className="text-white/40 text-sm">¿Qué quieres hacer?</p>
+                          <div className="flex flex-wrap gap-2 justify-center">
+                            <button
+                              onClick={() => {
+                                // Start empty workout directly
+                                const newWorkout = {
+                                  id: `workout-${Date.now()}`,
+                                  day_id: viewDate,
+                                  name: 'Entreno libre',
+                                  started_at: new Date().toISOString(),
+                                  is_completed: false,
+                                  exercises: []
+                                };
+                                setData(prev => ({
+                                  ...prev,
+                                  workouts: [...(prev.workouts || []), newWorkout]
+                                }));
+                                showToast('Entreno iniciado 💪');
+                              }}
+                              className="px-4 py-2.5 bg-violet-500 rounded-xl font-medium inline-flex items-center gap-2"
+                            >
+                              <Play className="w-4 h-4" />
+                              Entreno libre
+                            </button>
+                            <button
+                              onClick={() => setScreen('workout')}
+                              className="px-4 py-2.5 bg-white/10 rounded-xl font-medium inline-flex items-center gap-2 hover:bg-white/20"
+                            >
+                              <Dumbbell className="w-4 h-4" />
+                              Usar plantilla
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
