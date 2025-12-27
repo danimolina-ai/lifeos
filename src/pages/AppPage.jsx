@@ -1864,14 +1864,14 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
   };
 
   // Filter data for current view date
-  const dayMeals = data.meals.filter(m => m.day_id === viewDate);
+  const dayMeals = (data.meals || []).filter(m => m.day_id === viewDate);
   const dayWorkout = (data.workouts || []).find(w => w.day_id === viewDate);
-  const dayTasks = data.tasks.filter(t => t.day_id === viewDate);
+  const dayTasks = (data.tasks || []).filter(t => t.day_id === viewDate);
   const dayJournal = data.journals?.find(j => j.date === viewDate);
 
   // Get habit logs for this day (initialize if needed)
   const dayHabitLogs = useMemo(() => {
-    return data.habits.map(habit => {
+    return (data.habits || []).map(habit => {
       const existingLog = data.habitLogs?.find(l => l.habit_id === habit.id && l.date === viewDate);
       return existingLog || { habit_id: habit.id, date: viewDate, completed: false };
     });
