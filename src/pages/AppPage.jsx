@@ -22555,11 +22555,42 @@ const SettingsScreen = ({ data, setData, showToast }) => {
 // MAIN APP
 // ============================================================================// Main App Component
 export default function LifeOSApp() {
-  const [data, setData] = useLocalStorage('lifeOS_v58', EMPTY_DATA);
+  const [rawData, setData] = useLocalStorage('lifeOS_v58', EMPTY_DATA);
   const [screen, setScreen] = useState('today');
   const [toast, setToast] = useState(null);
   const [hubOpen, setHubOpen] = useState(false); // Hub menu state - must be before any conditional returns
   const [showTour, setShowTour] = useState(false); // Interactive tour state
+
+  // Normalize data to ensure all arrays exist (protects against corrupted localStorage)
+  const data = useMemo(() => ({
+    ...EMPTY_DATA,
+    ...rawData,
+    user: { ...EMPTY_DATA.user, ...(rawData?.user || {}) },
+    meals: rawData?.meals || [],
+    workouts: rawData?.workouts || [],
+    tasks: rawData?.tasks || [],
+    habits: rawData?.habits || [],
+    habitLogs: rawData?.habitLogs || [],
+    projects: rawData?.projects || [],
+    journals: rawData?.journals || [],
+    bodyMetrics: rawData?.bodyMetrics || [],
+    relationships: rawData?.relationships || [],
+    workoutTemplates: rawData?.workoutTemplates || [],
+    savedMeals: rawData?.savedMeals || [],
+    plannedMeals: rawData?.plannedMeals || [],
+    customFoods: rawData?.customFoods || [],
+    recipes: rawData?.recipes || [],
+    personalTasks: rawData?.personalTasks || [],
+    personalCategories: rawData?.personalCategories || [],
+    personalRecords: rawData?.personalRecords || [],
+    workTasks: rawData?.workTasks || [],
+    workProjects: rawData?.workProjects || [],
+    days: rawData?.days || {},
+    scheduledWorkouts: rawData?.scheduledWorkouts || {},
+    recurringWorkouts: rawData?.recurringWorkouts || {},
+    finances: { transactions: [], monthlyBudget: 0, ...(rawData?.finances || {}) },
+    goals: { annual: [], quarterly: [], monthly: [], ...(rawData?.goals || {}) }
+  }), [rawData]);
 
   // Listen for goToSettings event from global header
   useEffect(() => {
