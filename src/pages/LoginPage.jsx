@@ -84,12 +84,7 @@ export default function LoginPage() {
                             </div>
                         </div>
 
-                        {/* Forgot Password */}
-                        <div className="text-right">
-                            <Link to="/reset-password" className="text-sm text-purple-400 hover:text-purple-300">
-                                ¿Olvidaste tu contraseña?
-                            </Link>
-                        </div>
+                        {/* Forgot password - TODO: implement later */}
 
                         {/* Submit Button */}
                         <button
@@ -124,7 +119,7 @@ export default function LoginPage() {
 
                 {/* Footer */}
                 <p className="text-center text-slate-400 text-sm mt-8">
-                    © 2024 Life OS. Todos los derechos reservados.
+                    © 2025 Life OS. Todos los derechos reservados.
                 </p>
             </div>
         </div>

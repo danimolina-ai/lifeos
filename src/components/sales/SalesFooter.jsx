@@ -54,7 +54,7 @@ export default function SalesFooter() {
                 {/* Bottom */}
                 <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
                     <p className="text-white/30 text-sm">
-                        © 2024 Life OS. Todos los derechos reservados.
+                        © 2025 Life OS. Todos los derechos reservados.
                     </p>
                     <div className="flex items-center gap-6">
                         <span className="text-white/30 text-sm">Hecho con ❤️ para personas que quieren más</span>

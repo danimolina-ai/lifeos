@@ -190,7 +190,7 @@ export default function RegisterPage() {
 
                 {/* Footer */}
                 <p className="text-center text-slate-400 text-sm mt-8">
-                    © 2024 Life OS. Todos los derechos reservados.
+                    © 2025 Life OS. Todos los derechos reservados.
                 </p>
             </div>
         </div>
