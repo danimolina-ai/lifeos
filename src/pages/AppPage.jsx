@@ -3511,15 +3511,15 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                     started_at: new Date().toISOString(),
                                     is_completed: false,
                                     templateId: template.id,
-                                    exercises: template.exercises.map(e => ({
+                                    exercises: (template.exercises || []).map(e => ({
                                       id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                                      exerciseId: e.exerciseId,
-                                      name: e.name,
-                                      targetSets: e.sets || 3,
-                                      targetReps: e.reps || '8',
+                                      exerciseId: e.exerciseId || e.id,
+                                      name: e.name || 'Ejercicio',
+                                      targetSets: e.sets || e.targetSets || 3,
+                                      targetReps: e.reps || e.targetReps || '8',
                                       restSeconds: e.restSeconds || 90,
                                       notes: e.notes || '',
-                                      sets: Array.from({ length: e.sets || 3 }, () => ({
+                                      sets: Array.from({ length: e.sets || e.targetSets || 3 }, () => ({
                                         id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
                                         weight: null,
                                         reps: null,
