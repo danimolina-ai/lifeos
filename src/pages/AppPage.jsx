@@ -2442,7 +2442,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                       <div
                         key={corr.id}
                         className={`flex items-start gap-2 p-2 rounded-lg ${corr.type === 'success' ? 'bg-emerald-500/10' :
-                            corr.type === 'warning' ? 'bg-amber-500/10' : 'bg-blue-500/10'
+                          corr.type === 'warning' ? 'bg-amber-500/10' : 'bg-blue-500/10'
                           }`}
                       >
                         <span className="text-base flex-shrink-0">{corr.icon}</span>
@@ -3493,41 +3493,80 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                   ) : (
                     <div className="text-center py-4">
                       <p className="text-white/50 mb-4">Sin entreno programado para hoy</p>
-                      <div className="flex gap-2 justify-center">
-                        <button
-                          onClick={() => {
-                            // Create a quick demo workout
-                            const demoWorkout = {
-                              id: `workout-${Date.now()}`,
-                              day_id: viewDate,
-                              name: 'Push Day',
-                              is_completed: false,
-                              exercises: [
-                                { id: 'ex1', name: 'Press banca', sets: [{ reps: 8, weight: 60, completed: false }, { reps: 8, weight: 60, completed: false }, { reps: 8, weight: 60, completed: false }] },
-                                { id: 'ex2', name: 'Press inclinado', sets: [{ reps: 8, weight: 50, completed: false }, { reps: 8, weight: 50, completed: false }, { reps: 8, weight: 50, completed: false }] },
-                                { id: 'ex3', name: 'Aperturas', sets: [{ reps: 8, weight: 14, completed: false }, { reps: 8, weight: 14, completed: false }, { reps: 8, weight: 14, completed: false }] },
-                                { id: 'ex4', name: 'Press militar', sets: [{ reps: 8, weight: 40, completed: false }, { reps: 8, weight: 40, completed: false }, { reps: 8, weight: 40, completed: false }] }
-                              ]
-                            };
-                            setData(prev => ({
-                              ...prev,
-                              workouts: [...prev.workouts, demoWorkout]
-                            }));
-                            showToast('Entreno añadido');
-                          }}
-                          className="px-4 py-2.5 bg-violet-500 rounded-xl font-medium inline-flex items-center gap-2"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Añadir Push Day
-                        </button>
-                        <button
-                          onClick={() => setScreen('workout')}
-                          className="px-4 py-2.5 bg-white/10 rounded-xl font-medium inline-flex items-center gap-2 hover:bg-white/20"
-                        >
-                          <Dumbbell className="w-4 h-4" />
-                          Ver plantillas
-                        </button>
-                      </div>
+
+                      {/* Show available templates if any exist */}
+                      {data.workoutTemplates && data.workoutTemplates.length > 0 ? (
+                        <div className="space-y-3">
+                          <p className="text-white/40 text-sm">Elige una plantilla:</p>
+                          <div className="flex flex-wrap gap-2 justify-center">
+                            {data.workoutTemplates.slice(0, 3).map(template => (
+                              <button
+                                key={template.id}
+                                onClick={() => {
+                                  // Create workout from template with proper structure
+                                  const newWorkout = {
+                                    id: `workout-${Date.now()}`,
+                                    day_id: viewDate,
+                                    name: template.name,
+                                    started_at: new Date().toISOString(),
+                                    is_completed: false,
+                                    templateId: template.id,
+                                    exercises: template.exercises.map(e => ({
+                                      id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                                      exerciseId: e.exerciseId,
+                                      name: e.name,
+                                      targetSets: e.sets || 3,
+                                      targetReps: e.reps || '8',
+                                      restSeconds: e.restSeconds || 90,
+                                      notes: e.notes || '',
+                                      sets: Array.from({ length: e.sets || 3 }, () => ({
+                                        id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                                        weight: null,
+                                        reps: null,
+                                        rpe: null,
+                                        setType: 'normal',
+                                        completed: false
+                                      }))
+                                    }))
+                                  };
+                                  setData(prev => ({
+                                    ...prev,
+                                    workouts: [...prev.workouts, newWorkout]
+                                  }));
+                                  showToast(`${template.name} iniciado 💪`);
+                                }}
+                                className="px-4 py-2.5 bg-violet-500/20 border border-violet-500/30 rounded-xl font-medium inline-flex items-center gap-2 hover:bg-violet-500/40 transition-colors"
+                              >
+                                <Dumbbell className="w-4 h-4 text-violet-400" />
+                                {template.name}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() => setScreen('workout')}
+                            className="mt-2 px-4 py-2 text-white/40 text-sm hover:text-white/60 inline-flex items-center gap-1"
+                          >
+                            Ver todas las plantillas <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => setScreen('workout')}
+                            className="px-4 py-2.5 bg-violet-500 rounded-xl font-medium inline-flex items-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Crear plantilla
+                          </button>
+                          <button
+                            onClick={() => setScreen('workout')}
+                            className="px-4 py-2.5 bg-white/10 rounded-xl font-medium inline-flex items-center gap-2 hover:bg-white/20"
+                          >
+                            <Dumbbell className="w-4 h-4" />
+                            Entreno libre
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </Card>
