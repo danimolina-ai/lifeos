@@ -1759,6 +1759,15 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
   const [showExercisePicker, setShowExercisePicker] = useState(false);
   const [exerciseSearch, setExerciseSearch] = useState('');
 
+  // Workout tracking states
+  const [workoutElapsedTime, setWorkoutElapsedTime] = useState(0);
+  const [workoutRestTimer, setWorkoutRestTimer] = useState(null);
+  const [workoutRestDuration, setWorkoutRestDuration] = useState(90);
+  const [workoutActiveEx, setWorkoutActiveEx] = useState(0);
+  const [showWorkoutExercisePicker, setShowWorkoutExercisePicker] = useState(false);
+  const [workoutExerciseFilter, setWorkoutExerciseFilter] = useState({ search: '', muscle: null });
+  const [showPlateCalc, setShowPlateCalc] = useState(false);
+
   const today = getToday();
   const isViewingToday = viewDate === today;
 
@@ -1879,6 +1888,259 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
   const dayWorkout = (data.workouts || []).find(w => w.day_id === viewDate);
   const dayTasks = (data.tasks || []).filter(t => t.day_id === viewDate);
   const dayJournal = data.journals?.find(j => j.date === viewDate);
+
+  // Detect active workout (not completed) for today
+  const activeWorkout = (data.workouts || []).find(w => w.day_id === viewDate && !w.is_completed);
+
+  // Elapsed time effect for active workout
+  useEffect(() => {
+    if (activeWorkout && !activeWorkout.is_completed) {
+      const startTime = new Date(activeWorkout.started_at).getTime();
+      const updateElapsed = () => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        setWorkoutElapsedTime(elapsed);
+      };
+      updateElapsed();
+      const interval = setInterval(updateElapsed, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [activeWorkout?.id, activeWorkout?.is_completed]);
+
+  // Rest timer countdown effect
+  useEffect(() => {
+    if (workoutRestTimer !== null && workoutRestTimer > 0) {
+      const timer = setTimeout(() => {
+        setWorkoutRestTimer(t => {
+          if (t <= 1) {
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            return null;
+          }
+          return t - 1;
+        });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [workoutRestTimer]);
+
+  // Workout helper: Format time
+  const formatWorkoutTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Workout helper: Get workout totals
+  const getWorkoutTotals = () => {
+    if (!activeWorkout) return { sets: 0, totalSets: 0, volume: 0 };
+    let sets = 0, totalSets = 0, volume = 0;
+    activeWorkout.exercises.forEach(ex => {
+      ex.sets.forEach(set => {
+        if (set.setType !== 'warmup') totalSets++;
+        if (set.completed && set.setType !== 'warmup') sets++;
+        if (set.completed) volume += (set.weight || 0) * (set.reps || 0);
+      });
+    });
+    return { sets, totalSets, volume };
+  };
+
+  // Workout helper: Toggle set complete
+  const workoutToggleSet = (exIndex, setIndex) => {
+    if (!activeWorkout) return;
+    const exercise = activeWorkout.exercises[exIndex];
+    const set = exercise.sets[setIndex];
+
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.map(w => w.id === activeWorkout.id ? {
+        ...w,
+        exercises: w.exercises.map((e, ei) => ei === exIndex ? {
+          ...e,
+          sets: e.sets.map((s, si) => si === setIndex ? { ...s, completed: !s.completed } : s)
+        } : e)
+      } : w)
+    }));
+
+    if (!set.completed) {
+      setWorkoutRestTimer(exercise.restSeconds || 90);
+      setWorkoutRestDuration(exercise.restSeconds || 90);
+    }
+  };
+
+  // Workout helper: Update set field
+  const workoutUpdateSet = (exIndex, setIndex, field, value) => {
+    if (!activeWorkout) return;
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.map(w => w.id === activeWorkout.id ? {
+        ...w,
+        exercises: w.exercises.map((e, ei) => ei === exIndex ? {
+          ...e,
+          sets: e.sets.map((s, si) => si === setIndex ? { ...s, [field]: value } : s)
+        } : e)
+      } : w)
+    }));
+  };
+
+  // Workout helper: Add set
+  const workoutAddSet = (exIndex) => {
+    if (!activeWorkout) return;
+    const exercise = activeWorkout.exercises[exIndex];
+    const lastSet = exercise.sets[exercise.sets.length - 1];
+
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.map(w => w.id === activeWorkout.id ? {
+        ...w,
+        exercises: w.exercises.map((e, ei) => ei === exIndex ? {
+          ...e,
+          sets: [...e.sets, {
+            id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            weight: lastSet?.weight || 20,
+            reps: lastSet?.reps || 8,
+            rpe: null,
+            setType: 'normal',
+            completed: false
+          }]
+        } : e)
+      } : w)
+    }));
+  };
+
+  // Workout helper: Remove set
+  const workoutRemoveSet = (exIndex) => {
+    if (!activeWorkout) return;
+    const exercise = activeWorkout.exercises[exIndex];
+    if (exercise.sets.length <= 1) return;
+
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.map(w => w.id === activeWorkout.id ? {
+        ...w,
+        exercises: w.exercises.map((e, ei) => ei === exIndex ? {
+          ...e,
+          sets: e.sets.slice(0, -1)
+        } : e)
+      } : w)
+    }));
+  };
+
+  // Workout helper: Delete exercise
+  const workoutDeleteExercise = (exIndex) => {
+    if (!activeWorkout || activeWorkout.exercises.length <= 1) return;
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.map(w => w.id === activeWorkout.id ? {
+        ...w,
+        exercises: w.exercises.filter((_, i) => i !== exIndex)
+      } : w)
+    }));
+    if (workoutActiveEx >= exIndex && workoutActiveEx > 0) setWorkoutActiveEx(workoutActiveEx - 1);
+  };
+
+  // Workout helper: Add exercise to workout
+  const workoutAddExercise = (exerciseId) => {
+    if (!activeWorkout) return;
+    const exDb = getExerciseById(exerciseId);
+    if (!exDb) return;
+
+    const newEx = {
+      id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      exerciseId,
+      name: exDb.name,
+      targetSets: 3,
+      targetReps: '8-12',
+      restSeconds: 90,
+      notes: '',
+      sets: Array.from({ length: 3 }, () => ({
+        id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        weight: null, reps: null, rpe: null, setType: 'normal', completed: false
+      }))
+    };
+
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.map(w => w.id === activeWorkout.id ? {
+        ...w,
+        exercises: [...w.exercises, newEx]
+      } : w)
+    }));
+    setShowWorkoutExercisePicker(false);
+    setWorkoutActiveEx(activeWorkout.exercises.length);
+  };
+
+  // Workout helper: Complete workout
+  const workoutComplete = () => {
+    if (!activeWorkout) return;
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.map(w => w.id === activeWorkout.id ? {
+        ...w,
+        is_completed: true,
+        finished_at: new Date().toISOString(),
+        duration_seconds: workoutElapsedTime
+      } : w)
+    }));
+    showToast('¡Entreno completado! 🎉');
+    setWorkoutElapsedTime(0);
+    setWorkoutRestTimer(null);
+    setWorkoutActiveEx(0);
+  };
+
+  // Workout helper: Cancel workout
+  const workoutCancel = () => {
+    if (!activeWorkout) return;
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.filter(w => w.id !== activeWorkout.id)
+    }));
+    showToast('Entreno cancelado');
+    setWorkoutElapsedTime(0);
+    setWorkoutRestTimer(null);
+    setWorkoutActiveEx(0);
+  };
+
+  // Workout helper: Get filtered exercises
+  const getFilteredExercises = () => {
+    let exercises = getAllExercises();
+    if (workoutExerciseFilter.muscle) {
+      exercises = exercises.filter(e => e.muscle === workoutExerciseFilter.muscle);
+    }
+    if (workoutExerciseFilter.search) {
+      exercises = exercises.filter(e => e.name.toLowerCase().includes(workoutExerciseFilter.search.toLowerCase()));
+    }
+    return exercises;
+  };
+
+  // Workout helper: Get PR for exercise
+  const getExercisePR = (exerciseId) => {
+    let bestWeight = 0;
+    let bestReps = 0;
+    let prDate = null;
+    (data.workouts || []).filter(w => w.is_completed).forEach(w => {
+      w.exercises?.forEach(ex => {
+        if (ex.exerciseId === exerciseId) {
+          ex.sets?.filter(s => s.completed).forEach(set => {
+            if ((set.weight || 0) > bestWeight) {
+              bestWeight = set.weight;
+              bestReps = set.reps || 0;
+              prDate = w.day_id;
+            }
+          });
+        }
+      });
+    });
+    return bestWeight > 0 ? { weight: bestWeight, reps: bestReps, date: prDate } : null;
+  };
+
+  // Workout helper: Get last performance
+  const getLastPerformance = (exerciseId) => {
+    const workouts = (data.workouts || [])
+      .filter(w => w.is_completed && w.exercises?.some(e => e.exerciseId === exerciseId))
+      .sort((a, b) => b.day_id.localeCompare(a.day_id));
+    if (workouts.length === 0) return null;
+    const ex = workouts[0].exercises?.find(e => e.exerciseId === exerciseId);
+    return ex ? { ...ex, date: workouts[0].day_id } : null;
+  };
 
   // Get routines (use defaults if no custom routines exist) - same logic as WorkoutScreen
   const routines = data.workoutRoutines?.length > 0 ? data.workoutRoutines : DEFAULT_ROUTINES;
@@ -3241,268 +3503,224 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                         </div>
                       )}
                     </div>
-                  ) : dayWorkout ? (
-                    <div>
-                      {/* Header with options */}
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="font-medium">{dayWorkout.name}</span>
+                  ) : activeWorkout ? (
+                    <div className="space-y-4">
+                      {/* Workout Header with Timer */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-lg">{activeWorkout.name}</p>
+                          <p className="text-xs text-white/50">{activeWorkout.exercises.length} ejercicios</p>
+                        </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-violet-400">{workoutProgress.completed}/{workoutProgress.total} sets</span>
+                          <div className="flex items-center gap-1 text-violet-400 font-mono">
+                            <Timer className="w-4 h-4" />
+                            <span>{formatWorkoutTime(workoutElapsedTime)}</span>
+                          </div>
                           <button
-                            onClick={() => setShowWorkoutOptions(!showWorkoutOptions)}
-                            className="p-1 hover:bg-white/10 rounded"
+                            onClick={workoutCancel}
+                            className="p-1.5 bg-red-500/20 rounded-lg text-red-400 hover:bg-red-500/30"
                           >
-                            <MoreHorizontal className="w-4 h-4 text-white/40" />
+                            <X className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
 
-                      {/* Workout options dropdown */}
-                      {showWorkoutOptions && (
-                        <div className="mb-3 p-2 bg-white/5 rounded-xl space-y-1">
-                          <button
-                            onClick={() => {
-                              setData(prev => ({
-                                ...prev,
-                                workouts: prev.workouts.filter(w => w.id !== dayWorkout.id)
-                              }));
-                              setShowWorkoutOptions(false);
-                              showToast('Entreno eliminado');
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg"
-                          >
-                            <Trash2 className="w-4 h-4" /> Eliminar entreno
-                          </button>
-                          <button
-                            onClick={() => {
-                              setScreen('workout');
-                              setShowWorkoutOptions(false);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-white/60 hover:bg-white/10 rounded-lg"
-                          >
-                            <RefreshCw className="w-4 h-4" /> Cambiar por otro
-                          </button>
+                      {/* Progress Bar */}
+                      <div>
+                        <div className="flex items-center justify-between text-xs text-white/60 mb-1">
+                          <span>Progreso</span>
+                          <span>{getWorkoutTotals().sets}/{getWorkoutTotals().totalSets} sets · {getWorkoutTotals().volume.toLocaleString()}kg</span>
+                        </div>
+                        <ProgressBar
+                          value={getWorkoutTotals().sets}
+                          max={getWorkoutTotals().totalSets || 1}
+                          color="bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                        />
+                      </div>
+
+                      {/* Rest Timer */}
+                      {workoutRestTimer !== null && (
+                        <div className="p-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-xl border border-blue-500/30">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <Timer className="w-4 h-4 text-blue-400" />
+                              <span className="font-medium text-sm">Descanso</span>
+                            </div>
+                            <span className="text-xl font-mono font-bold">{formatWorkoutTime(workoutRestTimer)}</span>
+                          </div>
+                          <ProgressBar value={workoutRestTimer} max={workoutRestDuration} color="bg-blue-500" height="h-1.5" />
+                          <div className="flex gap-2 mt-2">
+                            <button onClick={() => setWorkoutRestTimer(t => t + 30)} className="flex-1 py-1.5 bg-white/10 rounded-lg text-xs">+30s</button>
+                            <button onClick={() => setWorkoutRestTimer(null)} className="flex-1 py-1.5 bg-white/10 rounded-lg text-xs">Saltar</button>
+                          </div>
                         </div>
                       )}
 
-                      <ProgressBar
-                        value={workoutProgress.completed}
-                        max={workoutProgress.total}
-                        color="bg-violet-500"
-                        height="h-2"
-                      />
+                      {/* Exercises */}
+                      {activeWorkout.exercises.map((ex, exIndex) => {
+                        const exCompleted = ex.sets.filter(s => s.completed && s.setType !== 'warmup').length;
+                        const exTotal = ex.sets.filter(s => s.setType !== 'warmup').length;
+                        const pr = getExercisePR(ex.exerciseId);
+                        const lastPerf = getLastPerformance(ex.exerciseId);
+                        const isActive = workoutActiveEx === exIndex;
+                        const exVolume = ex.sets.filter(s => s.completed).reduce((sum, s) => sum + (s.weight || 0) * (s.reps || 0), 0);
 
-                      {/* Exercise List */}
-                      <div className="mt-4 space-y-3">
-                        {dayWorkout.exercises?.map((exercise, exIdx) => {
-                          const completedSets = exercise.sets.filter(s => s.completed).length;
-                          const allDone = completedSets === exercise.sets.length;
-                          const nextSetIdx = exercise.sets.findIndex(s => !s.completed);
-
-                          return (
-                            <div
-                              key={exercise.id || exIdx}
-                              className={`p-3 rounded-xl ${allDone ? 'bg-emerald-500/10' : 'bg-white/5'}`}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  {allDone ? (
-                                    <Check className="w-4 h-4 text-emerald-400" />
-                                  ) : (
-                                    <Dumbbell className="w-4 h-4 text-violet-400" />
-                                  )}
-                                  <span className={`font-medium text-sm ${allDone ? 'text-emerald-400' : ''}`}>
-                                    {exercise.name}
-                                  </span>
+                        return (
+                          <div
+                            key={ex.id}
+                            onClick={() => setWorkoutActiveEx(exIndex)}
+                            className={`p-3 rounded-xl cursor-pointer transition-all ${isActive ? 'bg-violet-500/10 border border-violet-500/30' : 'bg-white/5'}`}
+                          >
+                            {/* Exercise header */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${exCompleted === exTotal && exTotal > 0 ? 'bg-emerald-500' : 'bg-white/10'}`}>
+                                  {exIndex + 1}
                                 </div>
-                                <span className="text-xs text-white/40">
-                                  {completedSets}/{exercise.sets.length} sets
-                                </span>
+                                <div>
+                                  <p className="font-medium text-sm">{ex.name}</p>
+                                  <p className="text-xs text-white/40">
+                                    {exCompleted}/{exTotal} · {ex.targetReps}{exVolume > 0 && ` · ${exVolume}kg`}
+                                  </p>
+                                </div>
                               </div>
+                              {exCompleted === exTotal && exTotal > 0 && <Check className="w-4 h-4 text-emerald-400" />}
+                            </div>
 
-                              {/* Sets */}
-                              <div className="flex flex-wrap gap-2">
-                                {exercise.sets.map((set, setIdx) => {
-                                  const isNext = setIdx === nextSetIdx && !allDone;
-                                  const setKey = `${dayWorkout.id}-${exIdx}-${setIdx}`;
-                                  const isEditing = editingSet === setKey;
+                            {/* Info badges */}
+                            {(pr || lastPerf) && (
+                              <div className="flex gap-2 mb-2 text-xs flex-wrap">
+                                {pr && <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">🏆 PR: {pr.weight}kg</span>}
+                                {lastPerf && <span className="px-2 py-0.5 bg-white/10 rounded">📊 Último: {lastPerf.sets[0]?.weight}kg</span>}
+                              </div>
+                            )}
 
-                                  if (isEditing) {
-                                    return (
-                                      <div key={setIdx} className="flex items-center gap-1 bg-violet-500/20 rounded-lg p-1">
-                                        <input
-                                          type="number"
-                                          defaultValue={set.weight}
-                                          className="w-12 px-1.5 py-1 bg-white/10 rounded text-xs text-center"
-                                          placeholder="kg"
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              const weight = parseFloat(e.target.value) || set.weight;
-                                              const repsInput = e.target.nextElementSibling;
-                                              const reps = parseInt(repsInput?.value) || set.reps;
-                                              setData(prev => ({
-                                                ...prev,
-                                                workouts: prev.workouts.map(w =>
-                                                  w.id === dayWorkout.id ? {
-                                                    ...w,
-                                                    exercises: w.exercises.map((ex, ei) =>
-                                                      ei === exIdx ? {
-                                                        ...ex,
-                                                        sets: ex.sets.map((s, si) =>
-                                                          si === setIdx ? { ...s, weight, reps, completed: true } : s
-                                                        )
-                                                      } : ex
-                                                    )
-                                                  } : w
-                                                )
-                                              }));
-                                              setEditingSet(null);
-                                            }
-                                          }}
-                                        />
-                                        <span className="text-white/40 text-xs">×</span>
-                                        <input
-                                          type="number"
-                                          defaultValue={set.reps}
-                                          className="w-10 px-1.5 py-1 bg-white/10 rounded text-xs text-center"
-                                          placeholder="reps"
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              const reps = parseInt(e.target.value) || set.reps;
-                                              const weightInput = e.target.previousElementSibling?.previousElementSibling;
-                                              const weight = parseFloat(weightInput?.value) || set.weight;
-                                              setData(prev => ({
-                                                ...prev,
-                                                workouts: prev.workouts.map(w =>
-                                                  w.id === dayWorkout.id ? {
-                                                    ...w,
-                                                    exercises: w.exercises.map((ex, ei) =>
-                                                      ei === exIdx ? {
-                                                        ...ex,
-                                                        sets: ex.sets.map((s, si) =>
-                                                          si === setIdx ? { ...s, weight, reps, completed: true } : s
-                                                        )
-                                                      } : ex
-                                                    )
-                                                  } : w
-                                                )
-                                              }));
-                                              setEditingSet(null);
-                                            }
-                                          }}
-                                        />
-                                        <button
-                                          onClick={() => {
-                                            const inputs = document.querySelectorAll(`input`);
-                                            let weight = set.weight, reps = set.reps;
-                                            inputs.forEach((input, i) => {
-                                              if (i % 2 === 0) weight = parseFloat(input.value) || weight;
-                                              else reps = parseInt(input.value) || reps;
-                                            });
-                                            setData(prev => ({
-                                              ...prev,
-                                              workouts: prev.workouts.map(w =>
-                                                w.id === dayWorkout.id ? {
-                                                  ...w,
-                                                  exercises: w.exercises.map((ex, ei) =>
-                                                    ei === exIdx ? {
-                                                      ...ex,
-                                                      sets: ex.sets.map((s, si) =>
-                                                        si === setIdx ? { ...s, weight, reps, completed: true } : s
-                                                      )
-                                                    } : ex
-                                                  )
-                                                } : w
-                                              )
-                                            }));
-                                            setEditingSet(null);
-                                          }}
-                                          className="p-1 bg-emerald-500 rounded text-xs"
-                                        >
-                                          <Check className="w-3 h-3" />
-                                        </button>
-                                        <button
-                                          onClick={() => setEditingSet(null)}
-                                          className="p-1 bg-white/10 rounded text-xs"
-                                        >
-                                          <X className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    );
-                                  }
+                            {/* Sets - when active */}
+                            {isActive && (
+                              <div className="mt-3 space-y-2">
+                                {/* Header */}
+                                <div className="grid grid-cols-12 gap-1 text-xs text-white/40 px-1">
+                                  <span className="col-span-1">SET</span>
+                                  <span className="col-span-3 text-center">KG</span>
+                                  <span className="col-span-3 text-center">REPS</span>
+                                  <span className="col-span-2 text-center">TIPO</span>
+                                  <span className="col-span-3"></span>
+                                </div>
+
+                                {/* Set rows */}
+                                {ex.sets.map((set, setIndex) => {
+                                  const lastSet = lastPerf?.sets[setIndex];
+                                  const setTypeInfo = SET_TYPES[set.setType] || SET_TYPES.normal;
 
                                   return (
-                                    <button
-                                      key={setIdx}
-                                      onClick={() => {
-                                        if (set.completed) {
-                                          // If completed, toggle off
-                                          setData(prev => ({
-                                            ...prev,
-                                            workouts: prev.workouts.map(w =>
-                                              w.id === dayWorkout.id ? {
-                                                ...w,
-                                                exercises: w.exercises.map((ex, ei) =>
-                                                  ei === exIdx ? {
-                                                    ...ex,
-                                                    sets: ex.sets.map((s, si) =>
-                                                      si === setIdx ? { ...s, completed: false } : s
-                                                    )
-                                                  } : ex
-                                                )
-                                              } : w
-                                            )
-                                          }));
-                                        } else {
-                                          // If not completed, open editor
-                                          setEditingSet(setKey);
-                                        }
-                                      }}
-                                      className={`
-                                    px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all active:scale-95
-                                    ${set.completed
-                                          ? 'bg-emerald-500 text-white'
-                                          : isNext
-                                            ? 'bg-violet-500 text-white ring-2 ring-violet-400 ring-offset-1 ring-offset-zinc-900'
-                                            : 'bg-white/10 text-white/60 hover:bg-white/20'
-                                        }
-                                  `}
+                                    <div
+                                      key={set.id}
+                                      className={`grid grid-cols-12 gap-1 items-center p-1.5 rounded-lg ${set.completed ? 'bg-emerald-500/20' : setTypeInfo.color}`}
                                     >
-                                      {set.completed ? `✓ ${set.weight}×${set.reps}` : `${set.weight}kg×${set.reps}`}
-                                    </button>
+                                      <span className={`col-span-1 text-center text-xs font-medium ${setTypeInfo.textColor || ''}`}>
+                                        {set.setType === 'warmup' ? 'W' : setIndex + 1 - ex.sets.slice(0, setIndex).filter(s => s.setType === 'warmup').length}
+                                      </span>
+                                      <input
+                                        type="number"
+                                        placeholder={lastSet?.weight?.toString() || '-'}
+                                        value={set.weight || ''}
+                                        onChange={(e) => workoutUpdateSet(exIndex, setIndex, 'weight', parseFloat(e.target.value) || null)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="col-span-3 bg-white/10 rounded-lg px-2 py-1 text-center outline-none text-xs w-full"
+                                      />
+                                      <input
+                                        type="number"
+                                        placeholder={ex.targetReps?.split('-')[0] || '-'}
+                                        value={set.reps || ''}
+                                        onChange={(e) => workoutUpdateSet(exIndex, setIndex, 'reps', parseInt(e.target.value) || null)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="col-span-3 bg-white/10 rounded-lg px-2 py-1 text-center outline-none text-xs w-full"
+                                      />
+                                      <select
+                                        value={set.setType}
+                                        onChange={(e) => workoutUpdateSet(exIndex, setIndex, 'setType', e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="col-span-2 bg-white/10 rounded-lg px-1 py-1 text-center outline-none text-xs appearance-none"
+                                      >
+                                        {Object.entries(SET_TYPES).map(([key, type]) => (
+                                          <option key={key} value={key}>{type.name}</option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); workoutToggleSet(exIndex, setIndex); }}
+                                        className={`col-span-3 h-7 rounded-lg flex items-center justify-center transition-all ${set.completed ? 'bg-emerald-500' : 'bg-white/10 hover:bg-white/20'}`}
+                                      >
+                                        <Check className="w-3 h-3" />
+                                      </button>
+                                    </div>
                                   );
                                 })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
 
-                      {/* Complete Workout Button */}
-                      {workoutProgress.completed > 0 && workoutProgress.completed >= workoutProgress.total * 0.5 && (
+                                {/* Actions */}
+                                <div className="flex gap-2 pt-1">
+                                  <button onClick={(e) => { e.stopPropagation(); workoutAddSet(exIndex); }} className="flex-1 py-1.5 border border-dashed border-white/20 rounded-lg text-xs text-white/50">+ Set</button>
+                                  {ex.sets.length > 1 && (
+                                    <button onClick={(e) => { e.stopPropagation(); workoutRemoveSet(exIndex); }} className="px-3 py-1.5 bg-white/5 rounded-lg text-xs text-white/50 hover:bg-red-500/20 hover:text-red-400">-</button>
+                                  )}
+                                  <button onClick={(e) => { e.stopPropagation(); workoutDeleteExercise(exIndex); }} className="px-3 py-1.5 bg-white/5 rounded-lg text-xs text-white/50 hover:bg-red-500/20 hover:text-red-400">🗑️</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Add exercise button */}
+                      <button
+                        onClick={() => setShowWorkoutExercisePicker(true)}
+                        className="w-full p-3 border border-dashed border-white/20 rounded-xl text-white/50 flex items-center justify-center gap-2 text-sm"
+                      >
+                        <Plus className="w-4 h-4" /> Añadir ejercicio
+                      </button>
+
+                      {/* Complete workout button */}
+                      {getWorkoutTotals().sets >= Math.floor(getWorkoutTotals().totalSets * 0.3) && (
                         <button
-                          onClick={() => {
-                            setData(prev => ({
-                              ...prev,
-                              workouts: prev.workouts.map(w =>
-                                w.id === dayWorkout.id ? { ...w, is_completed: true } : w
-                              )
-                            }));
-                            showToast('¡Entreno completado! 💪');
-                          }}
-                          className="mt-4 w-full py-3 bg-gradient-to-r from-emerald-500 to-green-500 rounded-xl font-medium flex items-center justify-center gap-2"
+                          onClick={workoutComplete}
+                          className="w-full bg-gradient-to-r from-emerald-500 to-green-500 py-3 rounded-xl font-medium flex items-center justify-center gap-2"
                         >
                           <Trophy className="w-5 h-5" /> Completar entreno
                         </button>
                       )}
 
-                      {/* Link to full workout screen */}
-                      <button
-                        onClick={() => setScreen('workout')}
-                        className="mt-2 w-full py-2 text-violet-400 text-sm flex items-center justify-center gap-1 hover:bg-white/5 rounded-lg"
-                      >
-                        Ver detalles completos <ArrowRight className="w-4 h-4" />
-                      </button>
+                      {/* Exercise Picker Modal */}
+                      <Modal isOpen={showWorkoutExercisePicker} onClose={() => setShowWorkoutExercisePicker(false)} title="Añadir ejercicio">
+                        <input
+                          type="text"
+                          placeholder="Buscar..."
+                          value={workoutExerciseFilter.search}
+                          onChange={(e) => setWorkoutExerciseFilter(f => ({ ...f, search: e.target.value }))}
+                          className="w-full bg-white/10 rounded-xl p-3 outline-none mb-3"
+                        />
+                        <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+                          <button onClick={() => setWorkoutExerciseFilter(f => ({ ...f, muscle: null }))} className={`px-3 py-1 rounded-lg text-sm ${!workoutExerciseFilter.muscle ? 'bg-violet-500' : 'bg-white/10'}`}>Todos</button>
+                          {Object.entries(EXERCISE_DATABASE).map(([key, cat]) => (
+                            <button key={key} onClick={() => setWorkoutExerciseFilter(f => ({ ...f, muscle: key }))} className={`px-3 py-1 rounded-lg text-sm whitespace-nowrap ${workoutExerciseFilter.muscle === key ? 'bg-violet-500' : 'bg-white/10'}`}>{cat.emoji}</button>
+                          ))}
+                        </div>
+                        <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                          {getFilteredExercises().map(ex => (
+                            <button key={ex.id} onClick={() => workoutAddExercise(ex.id)} className="w-full flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 text-left">
+                              <span>{ex.muscleEmoji}</span>
+                              <div className="flex-1">
+                                <p>{ex.name}</p>
+                                <p className="text-xs text-white/40">{ex.muscleName}</p>
+                              </div>
+                              {getExercisePR(ex.id) && <span className="text-xs text-yellow-400">{getExercisePR(ex.id).weight}kg</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </Modal>
+
+                      {/* Plate Calculator Modal */}
+                      <Modal isOpen={showPlateCalc} onClose={() => setShowPlateCalc(false)} title="Calculadora de discos">
+                        <PlateCalculator />
+                      </Modal>
                     </div>
                   ) : (
                     <div className="text-center py-4">
@@ -3778,8 +3996,8 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                         }}
                                         disabled={!newTemplateName.trim() || newTemplateExercises.length === 0}
                                         className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${newTemplateName.trim() && newTemplateExercises.length > 0
-                                            ? 'bg-gradient-to-r from-green-500 to-emerald-500'
-                                            : 'bg-white/10 text-white/40'
+                                          ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                                          : 'bg-white/10 text-white/40'
                                           }`}
                                       >
                                         <Check className="w-5 h-5" /> Guardar plantilla
@@ -3853,1116 +4071,808 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                 </Card>
               </AccordionSection>
             </AnimatedMount>
-          )}
+          )
+          }
 
           {/* Consciousness Section */}
           {/* Nutrition Section */}
-          {activeAreas.includes('nutrition') && (
-            <AnimatedMount delay={100}>
-              <AccordionSection
-                title="NUTRICIÓN"
-                icon={Utensils}
-                iconColor="text-orange-400"
-                action={() => setScreen('meals')}
-                actionLabel="Ver todo"
-                storageKey="nutrition"
-                progress={Math.round((totalCals / (data.user.goals?.calories || 2000)) * 100)}
-                progressColor="bg-orange-500"
-                summaryRight={`${totalCals}/${data.user.goals?.calories || 2000}`}
-                summary={(() => {
-                  const protPct = Math.round((totalProt / (data.user.goals?.protein || 120)) * 100);
-                  return `${protPct}% proteína · ${dayMeals.length} comida${dayMeals.length !== 1 ? 's' : ''}`;
-                })()}
-              >
-                <Card className="mt-3">
-                  {/* Planned meals pending confirmation */}
-                  {plannedMealsForDate.length > 0 && (
-                    <div className="mb-4 pb-4 border-b border-white/10">
-                      <p className="text-xs text-amber-400 mb-2 flex items-center gap-1">
-                        <Calendar className="w-3 h-3" /> PLANIFICADAS PARA HOY
-                      </p>
-                      <div className="space-y-2">
-                        {plannedMealsForDate.map(meal => (
-                          <div key={meal.id} className="flex items-center gap-2 p-2 bg-amber-500/10 rounded-lg">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{meal.name}</p>
-                              <p className="text-xs text-white/40">{meal.calories} kcal</p>
-                            </div>
-                            <button
-                              onClick={() => deletePlannedMeal(meal.id)}
-                              className="p-1.5 hover:bg-white/10 rounded-lg"
-                            >
-                              <X className="w-3 h-3 text-white/40" />
-                            </button>
-                            <button
-                              onClick={() => confirmPlannedMeal(meal)}
-                              className="px-3 py-1.5 bg-emerald-500 rounded-lg text-xs font-medium"
-                            >
-                              ✓
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {dayMeals.length > 0 ? (
-                    <div className="space-y-3">
-                      {/* Calories */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Flame className="w-4 h-4 text-orange-400" />
-                          <span className="text-2xl font-bold">{totalCals}</span>
-                          <span className="text-white/40 text-sm">/ {data.user.goals.calories} kcal</span>
-                        </div>
-                        <span className="text-sm text-white/60">{Math.round((totalCals / data.user.goals.calories) * 100)}%</span>
-                      </div>
-                      <ProgressBar value={totalCals} max={data.user.goals.calories} color="bg-orange-500" />
-
-                      {/* Macros */}
-                      <div className="grid grid-cols-3 gap-3 pt-2">
-                        <div>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-emerald-400">Prot</span>
-                            <span>{totalProt}/{data.user.goals.protein}g</span>
-                          </div>
-                          <ProgressBar value={totalProt} max={data.user.goals.protein} color="bg-emerald-500" height="h-1.5" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-blue-400">Carbs</span>
-                            <span>{totalCarbs}/{data.user.goals.carbs}g</span>
-                          </div>
-                          <ProgressBar value={totalCarbs} max={data.user.goals.carbs} color="bg-blue-500" height="h-1.5" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-amber-400">Grasas</span>
-                            <span>{totalFats}/{data.user.goals.fats}g</span>
-                          </div>
-                          <ProgressBar value={totalFats} max={data.user.goals.fats} color="bg-amber-500" height="h-1.5" />
-                        </div>
-                      </div>
-
-                      {/* Meal status with add buttons */}
-                      <div className="flex gap-2 pt-2">
-                        {visibleMealTypes.map(meal => {
-                          const hasMeal = dayMeals.some(m => m.meal_type === meal.type || (meal.type === 'all'));
-                          const mealCals = meal.type === 'all'
-                            ? totalCals
-                            : dayMeals.filter(m => m.meal_type === meal.type).reduce((s, m) => s + (m.calories || 0), 0);
-                          return (
-                            <button
-                              key={meal.type}
-                              onClick={() => { setSelectedMealType(meal.type); setShowAddMeal(true); }}
-                              className={`flex-1 text-center py-2 rounded-lg transition-all ${hasMeal && mealCals > 0 ? 'bg-emerald-500/20' : 'bg-white/5 hover:bg-white/10'}`}
-                            >
-                              <span className="text-lg">{meal.emoji}</span>
-                              <p className={`text-[10px] ${hasMeal && mealCals > 0 ? 'text-emerald-400' : 'text-white/40'}`}>
-                                {mealCals > 0 ? `${mealCals}` : '+'}
-                              </p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <p className="text-white/40 mb-3">Sin comidas registradas</p>
-                      <button
-                        onClick={() => setShowAddMeal(true)}
-                        className="px-4 py-2 bg-orange-500/20 text-orange-400 rounded-xl flex items-center gap-2 mx-auto hover:bg-orange-500/30"
-                      >
-                        <Plus className="w-4 h-4" /> Añadir comida
-                      </button>
-                    </div>
-                  )}
-                </Card>
-              </AccordionSection>
-            </AnimatedMount>
-          )}
-
-          {/* Habits Section - Elite Design */}
-          {activeAreas.includes('habits') && (
-            <AnimatedMount delay={125}>
-              <AccordionSection
-                title="HÁBITOS"
-                icon={CheckSquare}
-                iconColor="text-emerald-400"
-                action={() => setScreen('habits')}
-                actionLabel="Ver todo"
-                storageKey="habits"
-                progress={todayHabits.length > 0 ? Math.round((habitsCompleted / todayHabits.length) * 100) : 0}
-                progressColor="bg-emerald-500"
-                urgent={(() => {
-                  // Urgent if any habit missed yesterday and not done today
-                  return data.habits.some(h => getMissedYesterday(h.id) && !dayHabitLogs.find(l => l.habit_id === h.id)?.completed);
-                })()}
-                summaryRight={`${habitsCompleted}/${todayHabits.length}`}
-                summary={(() => {
-                  const bestStreak = Math.max(...data.habits.map(h => getStreakWithFreeze(h.id).current), 0);
-                  const missedCount = data.habits.filter(h => getMissedYesterday(h.id) && !dayHabitLogs.find(l => l.habit_id === h.id)?.completed).length;
-                  if (missedCount > 0) return `⚠️ ${missedCount} sin hacer ayer`;
-                  return `${bestStreak}🔥 mejor racha`;
-                })()}
-              >
-                {/* Global Summary Card */}
-                {data.habits.length > 0 && (
-                  <Card className="bg-gradient-to-r from-emerald-500/10 to-violet-500/10 border-emerald-500/20 mb-3">
-                    <div className="flex items-center gap-4">
-                      {/* Progress Ring */}
-                      <div className="relative w-16 h-16 flex-shrink-0">
-                        <svg className="w-16 h-16 -rotate-90">
-                          <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
-                          <circle
-                            cx="32" cy="32" r="28" fill="none"
-                            stroke="url(#habitGradient)"
-                            strokeWidth="6"
-                            strokeLinecap="round"
-                            strokeDasharray={`${todayHabits.length > 0 ? (habitsCompleted / todayHabits.length) * 176 : 0} 176`}
-                          />
-                          <defs>
-                            <linearGradient id="habitGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                              <stop offset="0%" stopColor="#10b981" />
-                              <stop offset="100%" stopColor="#8b5cf6" />
-                            </linearGradient>
-                          </defs>
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-lg font-bold">{todayHabits.length > 0 ? Math.round((habitsCompleted / todayHabits.length) * 100) : 0}%</span>
-                        </div>
-                      </div>
-
-                      {/* Stats */}
-                      <div className="flex-1 grid grid-cols-2 gap-2">
-                        <div>
-                          <p className="text-[10px] text-white/40">Hoy</p>
-                          <p className="text-lg font-bold">{habitsCompleted}<span className="text-white/40 text-sm">/{todayHabits.length}</span></p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-white/40">Mejor racha</p>
-                          <p className="text-lg font-bold text-orange-400">
-                            {Math.max(...data.habits.map(h => getStreakWithFreeze(h.id).current), 0)}🔥
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-white/40">Consistencia 30d</p>
-                          <p className="text-sm font-medium text-emerald-400">
-                            {(() => {
-                              const last30 = Array.from({ length: 30 }, (_, i) => getDateOffset(today, -i));
-                              let total = 0, completed = 0;
-                              last30.forEach(date => {
-                                data.habits.forEach(h => {
-                                  if (shouldDoHabitOnDay(h, date)) {
-                                    total++;
-                                    if (data.habitLogs?.find(l => l.habit_id === h.id && l.date === date && l.completed)) completed++;
-                                  }
-                                });
-                              });
-                              return total > 0 ? Math.round((completed / total) * 100) : 0;
-                            })()}%
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-white/40">Completados</p>
-                          <p className="text-sm font-medium text-violet-400">
-                            {data.habitLogs?.filter(l => l.completed).length || 0} total
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Week mini calendar */}
-                    <div className="flex gap-1 mt-3 pt-3 border-t border-white/10">
-                      {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day, idx) => {
-                        const weekDates = getWeekDates(viewDate);
-                        const date = weekDates[idx];
-                        const isToday = date === today;
-                        const dayLogs = data.habitLogs?.filter(l => l.date === date && l.completed) || [];
-                        const dayHabitsCount = data.habits.filter(h => shouldDoHabitOnDay(h, date)).length;
-                        const completedCount = dayLogs.length;
-                        const percentage = dayHabitsCount > 0 ? completedCount / dayHabitsCount : 0;
-
-                        return (
-                          <div key={idx} className={`flex-1 text-center py-1.5 rounded-lg ${isToday ? 'bg-white/10' : ''}`}>
-                            <p className="text-[9px] text-white/40">{day}</p>
-                            <div className={`w-5 h-5 mx-auto mt-1 rounded-full flex items-center justify-center text-[10px] font-medium
-                        ${percentage === 1 ? 'bg-emerald-500 text-white' :
-                                percentage > 0 ? 'bg-emerald-500/30 text-emerald-300' :
-                                  'bg-white/5 text-white/30'}
-                      `}>
-                              {percentage === 1 ? '✓' : completedCount}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Motivational nudge when no habits completed yet */}
-                    {isViewingToday && habitsCompleted === 0 && todayHabits.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-white/10 text-center">
-                        <p className="text-sm text-white/60">
-                          💪 <span className="text-emerald-400">¡Pequeños pasos!</span> Empieza con uno
+          {
+            activeAreas.includes('nutrition') && (
+              <AnimatedMount delay={100}>
+                <AccordionSection
+                  title="NUTRICIÓN"
+                  icon={Utensils}
+                  iconColor="text-orange-400"
+                  action={() => setScreen('meals')}
+                  actionLabel="Ver todo"
+                  storageKey="nutrition"
+                  progress={Math.round((totalCals / (data.user.goals?.calories || 2000)) * 100)}
+                  progressColor="bg-orange-500"
+                  summaryRight={`${totalCals}/${data.user.goals?.calories || 2000}`}
+                  summary={(() => {
+                    const protPct = Math.round((totalProt / (data.user.goals?.protein || 120)) * 100);
+                    return `${protPct}% proteína · ${dayMeals.length} comida${dayMeals.length !== 1 ? 's' : ''}`;
+                  })()}
+                >
+                  <Card className="mt-3">
+                    {/* Planned meals pending confirmation */}
+                    {plannedMealsForDate.length > 0 && (
+                      <div className="mb-4 pb-4 border-b border-white/10">
+                        <p className="text-xs text-amber-400 mb-2 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" /> PLANIFICADAS PARA HOY
                         </p>
+                        <div className="space-y-2">
+                          {plannedMealsForDate.map(meal => (
+                            <div key={meal.id} className="flex items-center gap-2 p-2 bg-amber-500/10 rounded-lg">
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{meal.name}</p>
+                                <p className="text-xs text-white/40">{meal.calories} kcal</p>
+                              </div>
+                              <button
+                                onClick={() => deletePlannedMeal(meal.id)}
+                                className="p-1.5 hover:bg-white/10 rounded-lg"
+                              >
+                                <X className="w-3 h-3 text-white/40" />
+                              </button>
+                              <button
+                                onClick={() => confirmPlannedMeal(meal)}
+                                className="px-3 py-1.5 bg-emerald-500 rounded-lg text-xs font-medium"
+                              >
+                                ✓
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
-                  </Card>
-                )}
 
-                {/* Never Miss Twice Alert */}
-                {isViewingToday && habitsWithAlert.length > 0 && (
-                  <Card className="bg-red-500/10 border-red-500/30 mb-3">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm text-red-300 font-medium">¡No falles dos veces!</p>
-                        <p className="text-xs text-red-400/70">
-                          {habitsWithAlert.map(h => h.icon + ' ' + h.name).join(', ')}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                )}
+                    {dayMeals.length > 0 ? (
+                      <div className="space-y-3">
+                        {/* Calories */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Flame className="w-4 h-4 text-orange-400" />
+                            <span className="text-2xl font-bold">{totalCals}</span>
+                            <span className="text-white/40 text-sm">/ {data.user.goals.calories} kcal</span>
+                          </div>
+                          <span className="text-sm text-white/60">{Math.round((totalCals / data.user.goals.calories) * 100)}%</span>
+                        </div>
+                        <ProgressBar value={totalCals} max={data.user.goals.calories} color="bg-orange-500" />
 
-                {/* Habits List */}
-                <Card>
-                  {/* Meta-habits (auto from other areas) */}
-                  {(() => {
-                    // Helper for gradual colors
-                    const getMetaColor = (progress) => {
-                      if (progress >= 80) return { bg: 'bg-emerald-500', text: 'text-emerald-400', bgLight: 'bg-emerald-500/20' };
-                      if (progress >= 60) return { bg: 'bg-lime-500', text: 'text-lime-400', bgLight: 'bg-lime-500/20' };
-                      if (progress >= 40) return { bg: 'bg-amber-500', text: 'text-amber-400', bgLight: 'bg-amber-500/20' };
-                      if (progress >= 20) return { bg: 'bg-orange-500', text: 'text-orange-400', bgLight: 'bg-orange-500/20' };
-                      return { bg: 'bg-red-500', text: 'text-red-400', bgLight: 'bg-red-500/20' };
-                    };
+                        {/* Macros */}
+                        <div className="grid grid-cols-3 gap-3 pt-2">
+                          <div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-emerald-400">Prot</span>
+                              <span>{totalProt}/{data.user.goals.protein}g</span>
+                            </div>
+                            <ProgressBar value={totalProt} max={data.user.goals.protein} color="bg-emerald-500" height="h-1.5" />
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-blue-400">Carbs</span>
+                              <span>{totalCarbs}/{data.user.goals.carbs}g</span>
+                            </div>
+                            <ProgressBar value={totalCarbs} max={data.user.goals.carbs} color="bg-blue-500" height="h-1.5" />
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-amber-400">Grasas</span>
+                              <span>{totalFats}/{data.user.goals.fats}g</span>
+                            </div>
+                            <ProgressBar value={totalFats} max={data.user.goals.fats} color="bg-amber-500" height="h-1.5" />
+                          </div>
+                        </div>
 
-                    const metaHabits = [
-                      {
-                        id: 'meta_nutrition',
-                        name: 'Nutrición',
-                        icon: '🥗',
-                        area: 'nutrition',
-                        target: 80,
-                        progress: () => {
-                          const todayMealsData = data.meals.filter(m => m.day_id === viewDate);
-                          const totalCals = todayMealsData.reduce((s, m) => s + (m.calories || 0), 0);
-                          const targetCals = data.user.goals?.calories || 2000;
-                          return Math.min(120, Math.round((totalCals / targetCals) * 100));
-                        }
-                      },
-                      {
-                        id: 'meta_protein',
-                        name: 'Proteína',
-                        icon: '💪',
-                        area: 'nutrition',
-                        target: 80,
-                        progress: () => {
-                          const todayMealsData = data.meals.filter(m => m.day_id === viewDate);
-                          const totalProt = todayMealsData.reduce((s, m) => s + (m.protein || 0), 0);
-                          const targetProt = data.user.goals?.protein || 120;
-                          return Math.min(120, Math.round((totalProt / targetProt) * 100));
-                        }
-                      },
-                      {
-                        id: 'meta_workout',
-                        name: 'Entreno',
-                        icon: '🏋️',
-                        area: 'workout',
-                        target: 70,
-                        progress: () => {
-                          const todayWorkout = (data.workouts || []).find(w => w.day_id === viewDate);
-                          if (!todayWorkout) return 0;
-                          if (todayWorkout.is_completed) return 100;
-                          const completedSets = todayWorkout.exercises?.reduce((sum, ex) =>
-                            sum + ex.sets.filter(s => s.completed).length, 0) || 0;
-                          const totalSets = todayWorkout.exercises?.reduce((sum, ex) => sum + ex.sets.length, 0) || 1;
-                          // Even starting counts
-                          if (completedSets > 0) return Math.max(30, Math.round((completedSets / totalSets) * 100));
-                          return 0;
-                        }
-                      },
-                      {
-                        id: 'meta_water',
-                        name: 'Agua',
-                        icon: '💧',
-                        area: 'nutrition',
-                        target: 75,
-                        progress: () => {
-                          const dayDataWater = data.days[viewDate];
-                          const waterGoal = data.user.goals?.water || 8;
-                          return Math.min(120, Math.round(((dayDataWater?.water_glasses || 0) / waterGoal) * 100));
-                        }
-                      },
-                      {
-                        id: 'meta_steps',
-                        name: '10k pasos',
-                        icon: '🚶',
-                        area: 'body',
-                        target: 80,
-                        progress: () => {
-                          const dayDataSteps = data.days[viewDate];
-                          const stepsGoal = data.user.goals?.steps || 10000;
-                          return Math.min(120, Math.round(((dayDataSteps?.steps || 0) / stepsGoal) * 100));
-                        }
-                      }
-                    ];
-
-                    const visibleMetas = metaHabits.filter(m => activeAreas.includes(m.area));
-                    if (visibleMetas.length === 0) return null;
-
-                    return (
-                      <div className="mb-3 pb-3 border-b border-white/10">
-                        <p className="text-[10px] text-white/40 mb-2 flex items-center gap-1">
-                          <Zap className="w-3 h-3" /> OBJETIVOS AUTO <span className="text-[8px] ml-1">(80% = ✓)</span>
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {visibleMetas.map(meta => {
-                            const progress = meta.progress();
-                            const colors = getMetaColor(progress);
-                            const hitTarget = progress >= meta.target;
-
+                        {/* Meal status with add buttons */}
+                        <div className="flex gap-2 pt-2">
+                          {visibleMealTypes.map(meal => {
+                            const hasMeal = dayMeals.some(m => m.meal_type === meal.type || (meal.type === 'all'));
+                            const mealCals = meal.type === 'all'
+                              ? totalCals
+                              : dayMeals.filter(m => m.meal_type === meal.type).reduce((s, m) => s + (m.calories || 0), 0);
                             return (
-                              <div
-                                key={meta.id}
-                                className={`flex items-center gap-2 p-2 rounded-lg transition-all ${colors.bgLight}`}
+                              <button
+                                key={meal.type}
+                                onClick={() => { setSelectedMealType(meal.type); setShowAddMeal(true); }}
+                                className={`flex-1 text-center py-2 rounded-lg transition-all ${hasMeal && mealCals > 0 ? 'bg-emerald-500/20' : 'bg-white/5 hover:bg-white/10'}`}
                               >
-                                <span className="text-lg">{meta.icon}</span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between">
-                                    <span className={`text-xs font-medium ${colors.text}`}>{meta.name}</span>
-                                    <span className={`text-[10px] font-bold ${colors.text}`}>{progress}%</span>
-                                  </div>
-                                  <div className="relative w-full h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden">
-                                    <div
-                                      className="absolute top-0 bottom-0 w-px bg-white/40"
-                                      style={{ left: `${meta.target}%` }}
-                                    />
-                                    <div
-                                      className={`h-full rounded-full transition-all ${colors.bg}`}
-                                      style={{ width: `${Math.min(progress, 100)}%` }}
-                                    />
-                                  </div>
-                                </div>
-                                {hitTarget && <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />}
-                              </div>
+                                <span className="text-lg">{meal.emoji}</span>
+                                <p className={`text-[10px] ${hasMeal && mealCals > 0 ? 'text-emerald-400' : 'text-white/40'}`}>
+                                  {mealCals > 0 ? `${mealCals}` : '+'}
+                                </p>
+                              </button>
                             );
                           })}
                         </div>
                       </div>
-                    );
-                  })()}
-
-                  {/* Regular habits */}
-                  {todayHabits.length > 0 ? (
-                    <div className="space-y-2">
-                      {todayHabits.map(habit => {
-                        const log = dayHabitLogs.find(l => l.habit_id === habit.id);
-                        const isCompleted = log?.completed || false;
-                        const usedMinVersion = log?.usedMinVersion || false;
-                        const streak = getStreakWithFreeze(habit.id);
-                        const missedYesterday = getMissedYesterday(habit.id);
-                        const masteryLevel = getMasteryLevel(habit.id);
-                        const stackedHabit = habit.stackedTo ? data.habits.find(h => h.id === habit.stackedTo) : null;
-
-                        return (
-                          <div
-                            key={habit.id}
-                            className={`relative flex items-center gap-3 p-2.5 rounded-xl transition-all
-                        ${isCompleted ? (usedMinVersion ? 'bg-emerald-500/10' : 'bg-emerald-500/20') : 'bg-white/5'}
-                        ${missedYesterday && !isCompleted ? 'ring-1 ring-red-500/50' : ''}
-                      `}
-                          >
-                            {/* Missed yesterday indicator */}
-                            {missedYesterday && !isCompleted && (
-                              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
-                            )}
-
-                            {/* Checkbox */}
-                            <button
-                              onClick={() => isViewingToday && toggleHabit(habit.id)}
-                              disabled={!isViewingToday}
-                              className={`w-9 h-9 rounded-xl border-2 flex items-center justify-center flex-shrink-0 transition-all
-                          ${isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-white/30 hover:border-emerald-400'}
-                        `}
-                            >
-                              {isCompleted ? <Check className="w-4 h-4" /> : <span className="text-lg">{habit.icon}</span>}
-                            </button>
-
-                            {/* Content */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-sm truncate ${isCompleted ? 'line-through text-white/50' : ''}`}>
-                                  {habit.name}
-                                </span>
-                                {/* Mastery dots */}
-                                <div className="flex gap-0.5 flex-shrink-0">
-                                  {[1, 2, 3, 4, 5].map(l => (
-                                    <div key={l} className={`w-1 h-1 rounded-full ${l <= masteryLevel ? 'bg-violet-400' : 'bg-white/10'}`} />
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 mt-0.5">
-                                {streak.current > 0 && (
-                                  <span className="text-[10px] text-orange-400">{streak.current}🔥</span>
-                                )}
-                                {stackedHabit && (
-                                  <span className="text-[10px] text-white/30">→ {stackedHabit.icon}</span>
-                                )}
-                                {habit.time && (
-                                  <span className="text-[10px] text-white/20">{habit.time}</span>
-                                )}
-                                {usedMinVersion && isCompleted && (
-                                  <span className="text-[10px] text-emerald-400/60">⚡ mínimo</span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Min version button */}
-                            {!isCompleted && habit.minVersion && isViewingToday && (
-                              <button
-                                onClick={() => toggleHabit(habit.id, true)}
-                                className="px-2 py-1 bg-emerald-500/20 rounded-lg text-[10px] text-emerald-400 flex-shrink-0 hover:bg-emerald-500/30"
-                                title={habit.minVersion}
-                              >
-                                ⚡ 2min
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : data.habits.length > 0 ? (
-                    <div className="text-center py-4">
-                      <p className="text-white/40 text-sm">Sin hábitos para hoy</p>
-                      <p className="text-[10px] text-white/30 mt-1">
-                        {data.habits.length} hábito{data.habits.length > 1 ? 's' : ''} configurado{data.habits.length > 1 ? 's' : ''} para otros días
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <p className="text-white/40 mb-2">Construye tu identidad</p>
-                      <button
-                        onClick={() => setScreen('habits')}
-                        className="text-sm text-violet-400 flex items-center gap-1 mx-auto"
-                      >
-                        <Plus className="w-4 h-4" /> Crear primer hábito
-                      </button>
-                    </div>
-                  )}
-                </Card>
-              </AccordionSection>
-            </AnimatedMount>
-          )}
-
-          {/* Work Section - EPIC VERSION */}
-          {activeAreas.includes('work') && (
-            <AnimatedMount delay={150}>
-              {(() => {
-                // Work data
-                const workTasks = data.workTasks || [];
-                const workProjects = data.workProjects || [];
-                const todayTasks = workTasks.filter(t => t.dueDate === viewDate || t.scheduledDate === viewDate);
-                const todayPending = todayTasks.filter(t => !t.completed);
-                const todayCompleted = todayTasks.filter(t => t.completed);
-                const q1Tasks = workTasks.filter(t => t.eisenhower === 'q1' && !t.completed);
-                const overdueTasks = workTasks.filter(t => t.dueDate && t.dueDate < viewDate && !t.completed);
-                const inboxTasks = workTasks.filter(t => !t.project_id && !t.dueDate && !t.completed);
-                const doingTasks = workTasks.filter(t => t.status === 'doing' && !t.completed);
-
-                // Deep work stats
-                const deepWorkToday = workTasks
-                  .filter(t => t.isDeepWork && t.completed && t.completedAt?.startsWith(viewDate))
-                  .reduce((sum, t) => sum + (t.timeEstimate || 0), 0);
-                const deepWorkGoal = data.user?.workSettings?.dailyDeepWorkGoal || 4;
-
-                // Eat the Frog - most important task
-                const frogTask = todayPending.find(t => t.eisenhower === 'q1') ||
-                  todayPending.find(t => t.priority === 'high') ||
-                  todayPending[0];
-
-                const getProject = (id) => workProjects.find(p => p.id === id);
-
-                const toggleWorkTask = (taskId) => {
-                  setData(prev => ({
-                    ...prev,
-                    workTasks: prev.workTasks.map(t =>
-                      t.id === taskId ? {
-                        ...t,
-                        completed: !t.completed,
-                        completedAt: !t.completed ? new Date().toISOString() : null,
-                        status: !t.completed ? 'done' : 'todo'
-                      } : t
-                    )
-                  }));
-                  showToast('✓ Tarea actualizada');
-                };
-
-                const addQuickTask = () => {
-                  if (!quickTaskInput.trim()) return;
-                  const newTask = {
-                    id: crypto.randomUUID(),
-                    title: quickTaskInput.trim(),
-                    description: '',
-                    project_id: '',
-                    priority: 'medium',
-                    eisenhower: '',
-                    status: 'backlog',
-                    timeEstimate: 30,
-                    dueDate: '',
-                    scheduledDate: '',
-                    isDeepWork: false,
-                    completed: false,
-                    completedAt: null,
-                    createdAt: new Date().toISOString()
-                  };
-                  setData(prev => ({
-                    ...prev,
-                    workTasks: [...(prev.workTasks || []), newTask]
-                  }));
-                  setQuickTaskInput('');
-                  showToast('📥 Añadido a Inbox');
-                };
-
-                const addDetailedTask = () => {
-                  if (!newDetailedTask.title.trim()) return;
-                  const newTask = {
-                    id: crypto.randomUUID(),
-                    ...newDetailedTask,
-                    scheduledDate: newDetailedTask.dueDate,
-                    completed: false,
-                    completedAt: null,
-                    createdAt: new Date().toISOString()
-                  };
-                  setData(prev => ({
-                    ...prev,
-                    workTasks: [...(prev.workTasks || []), newTask]
-                  }));
-                  setShowDetailedAdd(false);
-                  setNewDetailedTask({
-                    title: '', description: '', project_id: '', priority: 'medium',
-                    eisenhower: 'q2', status: 'todo', timeEstimate: 30, dueDate: viewDate, isDeepWork: false
-                  });
-                  showToast('✓ Tarea creada');
-                };
-
-                const updateTask = (taskId, updates) => {
-                  setData(prev => ({
-                    ...prev,
-                    workTasks: prev.workTasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
-                  }));
-                };
-
-                const deleteTask = (taskId) => {
-                  setData(prev => ({
-                    ...prev,
-                    workTasks: prev.workTasks.filter(t => t.id !== taskId)
-                  }));
-                  setEditingWorkTask(null);
-                  showToast('Tarea eliminada');
-                };
-
-                const changeTaskStatus = (taskId, newStatus) => {
-                  const updates = { status: newStatus };
-                  if (newStatus === 'done') {
-                    updates.completed = true;
-                    updates.completedAt = new Date().toISOString();
-                  }
-                  updateTask(taskId, updates);
-                  showToast('→ ' + (newStatus === 'backlog' ? 'Backlog' : newStatus === 'todo' ? 'Por hacer' : newStatus === 'doing' ? 'En progreso' : 'Hecho'));
-                };
-
-                const rescheduleTask = (taskId, newDate) => {
-                  updateTask(taskId, { dueDate: newDate, scheduledDate: newDate });
-                  showToast('📅 Reprogramada');
-                };
-
-                const startFocusTimer = (task, minutes = 25) => {
-                  setFocusTimer(task);
-                  setFocusTimeLeft(minutes * 60);
-                  showToast(`🍅 Focus: ${minutes}min en "${task.title}"`);
-                };
-
-                const formatTimer = (seconds) => {
-                  const m = Math.floor(seconds / 60);
-                  const s = seconds % 60;
-                  return `${m}:${s.toString().padStart(2, '0')}`;
-                };
-
-                // Task Item Component
-                const TaskItem = ({ task, showActions = true, highlight = false }) => {
-                  const project = getProject(task.project_id);
-                  const isOverdue = task.dueDate && task.dueDate < today && !task.completed;
-                  const isEditing = editingWorkTask?.id === task.id;
-                  const isFocusing = focusTimer?.id === task.id;
-
-                  return (
-                    <div className={`rounded-xl transition-all ${highlight ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30' :
-                      isFocusing ? 'bg-violet-500/20 border border-violet-500/50' :
-                        isOverdue ? 'bg-red-500/10' : 'bg-white/5'
-                      } ${task.completed ? 'opacity-60' : ''}`}>
-                      <div className="flex items-start gap-3 p-3">
-                        {/* Checkbox */}
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-white/40 mb-3">Sin comidas registradas</p>
                         <button
-                          onClick={() => toggleWorkTask(task.id)}
-                          disabled={!isViewingToday}
-                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center mt-0.5 transition-all flex-shrink-0
-                      ${task.completed ? 'bg-violet-500 border-violet-500' :
-                              task.priority === 'high' ? 'border-red-400' :
-                                task.priority === 'medium' ? 'border-yellow-400' : 'border-white/30'}
-                    `}
+                          onClick={() => setShowAddMeal(true)}
+                          className="px-4 py-2 bg-orange-500/20 text-orange-400 rounded-xl flex items-center gap-2 mx-auto hover:bg-orange-500/30"
                         >
-                          {task.completed && <Check className="w-3 h-3" />}
+                          <Plus className="w-4 h-4" /> Añadir comida
                         </button>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className={`text-sm font-medium ${task.completed ? 'line-through text-white/50' : ''}`}>
-                              {highlight && !task.completed && <span className="text-amber-400">🐸 </span>}
-                              {task.title}
-                            </p>
-                            {showActions && isViewingToday && !task.completed && (
-                              <button
-                                onClick={() => setEditingWorkTask(isEditing ? null : task)}
-                                className="p-1 hover:bg-white/10 rounded flex-shrink-0"
-                              >
-                                <MoreHorizontal className="w-4 h-4 text-white/40" />
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Meta */}
-                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                            {project && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded"
-                                style={{ backgroundColor: project.color + '30', color: project.color }}>
-                                {project.name}
-                              </span>
-                            )}
-                            {task.eisenhower === 'q1' && <span className="text-[10px] text-red-400">🔥</span>}
-                            {task.isDeepWork && <Brain className="w-3 h-3 text-violet-400" />}
-                            {task.timeEstimate && (
-                              <span className="text-[10px] text-white/30">{task.timeEstimate}min</span>
-                            )}
-                            {isOverdue && <span className="text-[10px] text-red-400">⚠️ {task.dueDate}</span>}
-                            {isFocusing && (
-                              <span className="text-[10px] text-violet-400 font-mono bg-violet-500/20 px-1.5 rounded">
-                                🍅 {formatTimer(focusTimeLeft)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Status pills */}
-                          {showActions && !task.completed && isViewingToday && (
-                            <div className="flex items-center gap-1.5 mt-2">
-                              {['backlog', 'todo', 'doing', 'done'].map(status => (
-                                <button
-                                  key={status}
-                                  onClick={() => changeTaskStatus(task.id, status)}
-                                  className={`px-2 py-0.5 rounded text-[9px] transition-all ${task.status === status ? 'bg-violet-500 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'
-                                    }`}
-                                >
-                                  {status === 'backlog' ? '📋' : status === 'todo' ? '📌' : status === 'doing' ? '🔄' : '✅'}
-                                </button>
-                              ))}
-                              {!isFocusing && (
-                                <button
-                                  onClick={() => startFocusTimer(task)}
-                                  className="px-2 py-0.5 rounded text-[9px] bg-orange-500/20 text-orange-400 hover:bg-orange-500/30"
-                                >
-                                  🍅 Focus
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
                       </div>
+                    )}
+                  </Card>
+                </AccordionSection>
+              </AnimatedMount>
+            )
+          }
 
-                      {/* Expanded actions */}
-                      {isEditing && (
-                        <div className="px-3 pb-3 pt-0 space-y-2 border-t border-white/10 mt-1">
-                          {/* Reschedule */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-white/40 w-16">Fecha:</span>
-                            <div className="flex gap-1 flex-wrap flex-1">
-                              <button onClick={() => rescheduleTask(task.id, today)}
-                                className={`px-2 py-1 rounded text-[10px] ${task.dueDate === today ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                Hoy
-                              </button>
-                              <button onClick={() => rescheduleTask(task.id, getDateOffset(today, 1))}
-                                className={`px-2 py-1 rounded text-[10px] ${task.dueDate === getDateOffset(today, 1) ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                Mañana
-                              </button>
-                              <button onClick={() => rescheduleTask(task.id, getDateOffset(today, 7))}
-                                className="px-2 py-1 rounded text-[10px] bg-white/10">
-                                +1 sem
-                              </button>
-                              <button onClick={() => rescheduleTask(task.id, '')}
-                                className="px-2 py-1 rounded text-[10px] bg-white/10">
-                                Sin fecha
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Priority */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-white/40 w-16">Prioridad:</span>
-                            <div className="flex gap-1">
-                              {['high', 'medium', 'low'].map(p => (
-                                <button key={p} onClick={() => updateTask(task.id, { priority: p })}
-                                  className={`px-2 py-1 rounded text-[10px] ${task.priority === p ?
-                                    (p === 'high' ? 'bg-red-500' : p === 'medium' ? 'bg-yellow-500' : 'bg-blue-500') : 'bg-white/10'}`}>
-                                  {p === 'high' ? '🔴 Alta' : p === 'medium' ? '🟡 Media' : '🔵 Baja'}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Eisenhower */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-white/40 w-16">Matriz:</span>
-                            <div className="flex gap-1 flex-wrap">
-                              {[
-                                { id: 'q1', label: '🔥 Hacer', color: 'bg-red-500' },
-                                { id: 'q2', label: '📅 Planificar', color: 'bg-blue-500' },
-                                { id: 'q3', label: '👤 Delegar', color: 'bg-amber-500' },
-                                { id: 'q4', label: '🗑️ Eliminar', color: 'bg-zinc-600' }
-                              ].map(q => (
-                                <button key={q.id} onClick={() => updateTask(task.id, { eisenhower: q.id })}
-                                  className={`px-2 py-1 rounded text-[10px] ${task.eisenhower === q.id ? q.color : 'bg-white/10'}`}>
-                                  {q.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Project */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-white/40 w-16">Proyecto:</span>
-                            <div className="flex gap-1 flex-wrap flex-1">
-                              <button onClick={() => updateTask(task.id, { project_id: '' })}
-                                className={`px-2 py-1 rounded text-[10px] ${!task.project_id ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                Ninguno
-                              </button>
-                              {workProjects.slice(0, 4).map(p => (
-                                <button key={p.id} onClick={() => updateTask(task.id, { project_id: p.id })}
-                                  className={`px-2 py-1 rounded text-[10px] flex items-center gap-1 ${task.project_id === p.id ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-                                  {p.name}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Deep Work toggle */}
-                          <div className="flex items-center justify-between">
-                            <button onClick={() => updateTask(task.id, { isDeepWork: !task.isDeepWork })}
-                              className={`px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${task.isDeepWork ? 'bg-violet-500' : 'bg-white/10'}`}>
-                              <Brain className="w-3 h-3" /> Deep Work
-                            </button>
-                            <button onClick={() => deleteTask(task.id)}
-                              className="px-3 py-1.5 rounded-lg text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                };
-
-                return (
-                  <AccordionSection
-                    title="TRABAJO"
-                    icon={Briefcase}
-                    iconColor="text-violet-400"
-                    action={() => setScreen('work')}
-                    actionLabel="Kanban"
-                    storageKey="work"
-                    progress={todayTasks.length > 0 ? Math.round((todayCompleted.length / todayTasks.length) * 100) : null}
-                    progressColor="bg-violet-500"
-                    urgent={overdueTasks.length > 0 || q1Tasks.length > 0}
-                    summaryRight={todayTasks.length > 0 ? `${todayCompleted.length}/${todayTasks.length}` : null}
-                    summary={(() => {
-                      if (overdueTasks.length > 0) return `⚠️ ${overdueTasks.length} vencida${overdueTasks.length > 1 ? 's' : ''}`;
-                      if (q1Tasks.length > 0) return `🔥 ${q1Tasks.length} urgente${q1Tasks.length > 1 ? 's' : ''}`;
-                      if (doingTasks.length > 0) return `🔄 ${doingTasks.length} en progreso`;
-                      if (todayPending.length > 0) return `${todayPending.length} pendiente${todayPending.length > 1 ? 's' : ''}`;
-                      if (todayCompleted.length > 0) return '✓ Todo completado';
-                      if (inboxTasks.length > 0) return `📥 ${inboxTasks.length} en inbox`;
-                      return 'Sin tareas';
-                    })()}
-                  >
-                    {/* Stats Card */}
-                    <Card className="bg-gradient-to-r from-violet-500/10 to-blue-500/10 border-violet-500/20 mb-3">
+          {/* Habits Section - Elite Design */}
+          {
+            activeAreas.includes('habits') && (
+              <AnimatedMount delay={125}>
+                <AccordionSection
+                  title="HÁBITOS"
+                  icon={CheckSquare}
+                  iconColor="text-emerald-400"
+                  action={() => setScreen('habits')}
+                  actionLabel="Ver todo"
+                  storageKey="habits"
+                  progress={todayHabits.length > 0 ? Math.round((habitsCompleted / todayHabits.length) * 100) : 0}
+                  progressColor="bg-emerald-500"
+                  urgent={(() => {
+                    // Urgent if any habit missed yesterday and not done today
+                    return data.habits.some(h => getMissedYesterday(h.id) && !dayHabitLogs.find(l => l.habit_id === h.id)?.completed);
+                  })()}
+                  summaryRight={`${habitsCompleted}/${todayHabits.length}`}
+                  summary={(() => {
+                    const bestStreak = Math.max(...data.habits.map(h => getStreakWithFreeze(h.id).current), 0);
+                    const missedCount = data.habits.filter(h => getMissedYesterday(h.id) && !dayHabitLogs.find(l => l.habit_id === h.id)?.completed).length;
+                    if (missedCount > 0) return `⚠️ ${missedCount} sin hacer ayer`;
+                    return `${bestStreak}🔥 mejor racha`;
+                  })()}
+                >
+                  {/* Global Summary Card */}
+                  {data.habits.length > 0 && (
+                    <Card className="bg-gradient-to-r from-emerald-500/10 to-violet-500/10 border-emerald-500/20 mb-3">
                       <div className="flex items-center gap-4">
                         {/* Progress Ring */}
-                        <div className="relative w-14 h-14 flex-shrink-0">
-                          <svg className="w-14 h-14 -rotate-90">
-                            <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5" />
+                        <div className="relative w-16 h-16 flex-shrink-0">
+                          <svg className="w-16 h-16 -rotate-90">
+                            <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
                             <circle
-                              cx="28" cy="28" r="24" fill="none"
-                              stroke="#8b5cf6"
-                              strokeWidth="5"
+                              cx="32" cy="32" r="28" fill="none"
+                              stroke="url(#habitGradient)"
+                              strokeWidth="6"
                               strokeLinecap="round"
-                              strokeDasharray={`${todayTasks.length > 0 ? (todayCompleted.length / todayTasks.length) * 151 : 0} 151`}
+                              strokeDasharray={`${todayHabits.length > 0 ? (habitsCompleted / todayHabits.length) * 176 : 0} 176`}
                             />
+                            <defs>
+                              <linearGradient id="habitGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stopColor="#10b981" />
+                                <stop offset="100%" stopColor="#8b5cf6" />
+                              </linearGradient>
+                            </defs>
                           </svg>
                           <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-sm font-bold">
-                              {todayTasks.length > 0 ? Math.round((todayCompleted.length / todayTasks.length) * 100) : 0}%
-                            </span>
+                            <span className="text-lg font-bold">{todayHabits.length > 0 ? Math.round((habitsCompleted / todayHabits.length) * 100) : 0}%</span>
                           </div>
                         </div>
 
                         {/* Stats */}
-                        <div className="flex-1 grid grid-cols-3 gap-2">
+                        <div className="flex-1 grid grid-cols-2 gap-2">
                           <div>
                             <p className="text-[10px] text-white/40">Hoy</p>
-                            <p className="text-lg font-bold">{todayCompleted.length}<span className="text-white/40 text-xs">/{todayTasks.length}</span></p>
+                            <p className="text-lg font-bold">{habitsCompleted}<span className="text-white/40 text-sm">/{todayHabits.length}</span></p>
                           </div>
                           <div>
-                            <p className="text-[10px] text-white/40">En progreso</p>
-                            <p className="text-lg font-bold text-amber-400">{doingTasks.length}</p>
+                            <p className="text-[10px] text-white/40">Mejor racha</p>
+                            <p className="text-lg font-bold text-orange-400">
+                              {Math.max(...data.habits.map(h => getStreakWithFreeze(h.id).current), 0)}🔥
+                            </p>
                           </div>
                           <div>
-                            <p className="text-[10px] text-white/40">Deep Work</p>
-                            <p className="text-sm font-bold text-violet-400">
-                              {Math.floor(deepWorkToday / 60)}h{deepWorkToday % 60 > 0 ? ` ${deepWorkToday % 60}m` : ''}
+                            <p className="text-[10px] text-white/40">Consistencia 30d</p>
+                            <p className="text-sm font-medium text-emerald-400">
+                              {(() => {
+                                const last30 = Array.from({ length: 30 }, (_, i) => getDateOffset(today, -i));
+                                let total = 0, completed = 0;
+                                last30.forEach(date => {
+                                  data.habits.forEach(h => {
+                                    if (shouldDoHabitOnDay(h, date)) {
+                                      total++;
+                                      if (data.habitLogs?.find(l => l.habit_id === h.id && l.date === date && l.completed)) completed++;
+                                    }
+                                  });
+                                });
+                                return total > 0 ? Math.round((completed / total) * 100) : 0;
+                              })()}%
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-white/40">Completados</p>
+                            <p className="text-sm font-medium text-violet-400">
+                              {data.habitLogs?.filter(l => l.completed).length || 0} total
                             </p>
                           </div>
                         </div>
                       </div>
 
-                      {/* Focus Timer Active */}
-                      {focusTimer && (
-                        <div className="mt-3 pt-3 border-t border-white/10">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-2xl">🍅</span>
-                              <div>
-                                <p className="text-xs text-white/60">Enfocado en:</p>
-                                <p className="text-sm font-medium">{focusTimer.title}</p>
+                      {/* Week mini calendar */}
+                      <div className="flex gap-1 mt-3 pt-3 border-t border-white/10">
+                        {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day, idx) => {
+                          const weekDates = getWeekDates(viewDate);
+                          const date = weekDates[idx];
+                          const isToday = date === today;
+                          const dayLogs = data.habitLogs?.filter(l => l.date === date && l.completed) || [];
+                          const dayHabitsCount = data.habits.filter(h => shouldDoHabitOnDay(h, date)).length;
+                          const completedCount = dayLogs.length;
+                          const percentage = dayHabitsCount > 0 ? completedCount / dayHabitsCount : 0;
+
+                          return (
+                            <div key={idx} className={`flex-1 text-center py-1.5 rounded-lg ${isToday ? 'bg-white/10' : ''}`}>
+                              <p className="text-[9px] text-white/40">{day}</p>
+                              <div className={`w-5 h-5 mx-auto mt-1 rounded-full flex items-center justify-center text-[10px] font-medium
+                        ${percentage === 1 ? 'bg-emerald-500 text-white' :
+                                  percentage > 0 ? 'bg-emerald-500/30 text-emerald-300' :
+                                    'bg-white/5 text-white/30'}
+                      `}>
+                                {percentage === 1 ? '✓' : completedCount}
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-2xl font-mono font-bold text-violet-400">
-                                {formatTimer(focusTimeLeft)}
-                              </span>
-                              <button
-                                onClick={() => { setFocusTimer(null); setFocusTimeLeft(0); }}
-                                className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Motivational nudge when no habits completed yet */}
+                      {isViewingToday && habitsCompleted === 0 && todayHabits.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-white/10 text-center">
+                          <p className="text-sm text-white/60">
+                            💪 <span className="text-emerald-400">¡Pequeños pasos!</span> Empieza con uno
+                          </p>
                         </div>
                       )}
                     </Card>
+                  )}
 
-                    {/* Quick Add */}
-                    {isViewingToday && (
-                      <Card className="mb-3">
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={quickTaskInput}
-                            onChange={(e) => setQuickTaskInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && addQuickTask()}
-                            placeholder="Añadir rápido a inbox..."
-                            className="flex-1 bg-white/5 rounded-xl px-3 py-2.5 text-sm outline-none focus:bg-white/10 transition-all"
-                          />
-                          <button
-                            onClick={addQuickTask}
-                            disabled={!quickTaskInput.trim()}
-                            className="px-3 py-2 bg-white/10 rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all"
-                          >
-                            <Plus className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={() => setShowDetailedAdd(true)}
-                            className="px-3 py-2 bg-violet-500 rounded-xl hover:bg-violet-600 transition-all"
-                          >
-                            <Edit3 className="w-5 h-5" />
-                          </button>
+                  {/* Never Miss Twice Alert */}
+                  {isViewingToday && habitsWithAlert.length > 0 && (
+                    <Card className="bg-red-500/10 border-red-500/30 mb-3">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm text-red-300 font-medium">¡No falles dos veces!</p>
+                          <p className="text-xs text-red-400/70">
+                            {habitsWithAlert.map(h => h.icon + ' ' + h.name).join(', ')}
+                          </p>
                         </div>
-                      </Card>
-                    )}
-
-                    {/* Tasks */}
-                    <Card>
-                      <div className="space-y-3">
-                        {/* Eat the Frog */}
-                        {frogTask && !frogTask.completed && (
-                          <div>
-                            <p className="text-[10px] text-amber-400 font-medium mb-1.5 flex items-center gap-1">
-                              🐸 EAT THE FROG
-                            </p>
-                            <TaskItem task={frogTask} highlight />
-                          </div>
-                        )}
-
-                        {/* Overdue */}
-                        {overdueTasks.length > 0 && (
-                          <div>
-                            <p className="text-[10px] text-red-400 font-medium mb-1.5 flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" /> VENCIDAS ({overdueTasks.length})
-                            </p>
-                            <div className="space-y-2">
-                              {overdueTasks.slice(0, 3).map(task => (
-                                <TaskItem key={task.id} task={task} />
-                              ))}
-                              {overdueTasks.length > 3 && (
-                                <button onClick={() => setScreen('work')} className="text-xs text-red-400 pl-2">
-                                  +{overdueTasks.length - 3} más
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* In Progress */}
-                        {doingTasks.length > 0 && (
-                          <div>
-                            <p className="text-[10px] text-amber-400 font-medium mb-1.5">🔄 EN PROGRESO ({doingTasks.length})</p>
-                            <div className="space-y-2">
-                              {doingTasks.slice(0, 3).map(task => (
-                                <TaskItem key={task.id} task={task} />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Today's remaining */}
-                        {todayPending.filter(t => t.id !== frogTask?.id && t.status !== 'doing').length > 0 && (
-                          <div>
-                            <p className="text-[10px] text-white/40 font-medium mb-1.5">
-                              HOY ({todayPending.filter(t => t.id !== frogTask?.id && t.status !== 'doing').length})
-                            </p>
-                            <div className="space-y-2">
-                              {todayPending
-                                .filter(t => t.id !== frogTask?.id && t.status !== 'doing')
-                                .slice(0, 4)
-                                .map(task => (
-                                  <TaskItem key={task.id} task={task} />
-                                ))}
-                              {todayPending.filter(t => t.id !== frogTask?.id && t.status !== 'doing').length > 4 && (
-                                <button onClick={() => setScreen('work')} className="text-xs text-violet-400 pl-2">
-                                  +{todayPending.filter(t => t.id !== frogTask?.id && t.status !== 'doing').length - 4} más
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Completed today */}
-                        {todayCompleted.length > 0 && (
-                          <div>
-                            <p className="text-[10px] text-emerald-400 font-medium mb-1.5">✓ COMPLETADAS ({todayCompleted.length})</p>
-                            <div className="space-y-1">
-                              {todayCompleted.slice(0, 2).map(task => (
-                                <TaskItem key={task.id} task={task} showActions={false} />
-                              ))}
-                              {todayCompleted.length > 2 && (
-                                <p className="text-[10px] text-white/30 pl-2">+{todayCompleted.length - 2} más</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Inbox preview */}
-                        {inboxTasks.length > 0 && todayPending.length === 0 && overdueTasks.length === 0 && (
-                          <div>
-                            <p className="text-[10px] text-white/40 font-medium mb-1.5">📥 INBOX ({inboxTasks.length})</p>
-                            <div className="space-y-2">
-                              {inboxTasks.slice(0, 3).map(task => (
-                                <TaskItem key={task.id} task={task} />
-                              ))}
-                              {inboxTasks.length > 3 && (
-                                <button onClick={() => setScreen('work')} className="text-xs text-violet-400 pl-2">
-                                  +{inboxTasks.length - 3} por procesar
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Empty state */}
-                        {todayTasks.length === 0 && overdueTasks.length === 0 && inboxTasks.length === 0 && (
-                          <div className="text-center py-4">
-                            <p className="text-2xl mb-2">🎯</p>
-                            <p className="text-white/40">Sin tareas pendientes</p>
-                            <p className="text-[10px] text-white/30 mt-1">¡Buen trabajo!</p>
-                          </div>
-                        )}
                       </div>
                     </Card>
+                  )}
 
-                    {/* Detailed Add Modal */}
-                    {showDetailedAdd && (
-                      <div className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4" onClick={() => setShowDetailedAdd(false)}>
-                        <div className="bg-zinc-900 rounded-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                          <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                            <h3 className="text-lg font-semibold">Nueva tarea</h3>
-                            <button onClick={() => setShowDetailedAdd(false)} className="p-2 hover:bg-white/10 rounded-xl">
-                              <X className="w-5 h-5" />
-                            </button>
+                  {/* Habits List */}
+                  <Card>
+                    {/* Meta-habits (auto from other areas) */}
+                    {(() => {
+                      // Helper for gradual colors
+                      const getMetaColor = (progress) => {
+                        if (progress >= 80) return { bg: 'bg-emerald-500', text: 'text-emerald-400', bgLight: 'bg-emerald-500/20' };
+                        if (progress >= 60) return { bg: 'bg-lime-500', text: 'text-lime-400', bgLight: 'bg-lime-500/20' };
+                        if (progress >= 40) return { bg: 'bg-amber-500', text: 'text-amber-400', bgLight: 'bg-amber-500/20' };
+                        if (progress >= 20) return { bg: 'bg-orange-500', text: 'text-orange-400', bgLight: 'bg-orange-500/20' };
+                        return { bg: 'bg-red-500', text: 'text-red-400', bgLight: 'bg-red-500/20' };
+                      };
+
+                      const metaHabits = [
+                        {
+                          id: 'meta_nutrition',
+                          name: 'Nutrición',
+                          icon: '🥗',
+                          area: 'nutrition',
+                          target: 80,
+                          progress: () => {
+                            const todayMealsData = data.meals.filter(m => m.day_id === viewDate);
+                            const totalCals = todayMealsData.reduce((s, m) => s + (m.calories || 0), 0);
+                            const targetCals = data.user.goals?.calories || 2000;
+                            return Math.min(120, Math.round((totalCals / targetCals) * 100));
+                          }
+                        },
+                        {
+                          id: 'meta_protein',
+                          name: 'Proteína',
+                          icon: '💪',
+                          area: 'nutrition',
+                          target: 80,
+                          progress: () => {
+                            const todayMealsData = data.meals.filter(m => m.day_id === viewDate);
+                            const totalProt = todayMealsData.reduce((s, m) => s + (m.protein || 0), 0);
+                            const targetProt = data.user.goals?.protein || 120;
+                            return Math.min(120, Math.round((totalProt / targetProt) * 100));
+                          }
+                        },
+                        {
+                          id: 'meta_workout',
+                          name: 'Entreno',
+                          icon: '🏋️',
+                          area: 'workout',
+                          target: 70,
+                          progress: () => {
+                            const todayWorkout = (data.workouts || []).find(w => w.day_id === viewDate);
+                            if (!todayWorkout) return 0;
+                            if (todayWorkout.is_completed) return 100;
+                            const completedSets = todayWorkout.exercises?.reduce((sum, ex) =>
+                              sum + ex.sets.filter(s => s.completed).length, 0) || 0;
+                            const totalSets = todayWorkout.exercises?.reduce((sum, ex) => sum + ex.sets.length, 0) || 1;
+                            // Even starting counts
+                            if (completedSets > 0) return Math.max(30, Math.round((completedSets / totalSets) * 100));
+                            return 0;
+                          }
+                        },
+                        {
+                          id: 'meta_water',
+                          name: 'Agua',
+                          icon: '💧',
+                          area: 'nutrition',
+                          target: 75,
+                          progress: () => {
+                            const dayDataWater = data.days[viewDate];
+                            const waterGoal = data.user.goals?.water || 8;
+                            return Math.min(120, Math.round(((dayDataWater?.water_glasses || 0) / waterGoal) * 100));
+                          }
+                        },
+                        {
+                          id: 'meta_steps',
+                          name: '10k pasos',
+                          icon: '🚶',
+                          area: 'body',
+                          target: 80,
+                          progress: () => {
+                            const dayDataSteps = data.days[viewDate];
+                            const stepsGoal = data.user.goals?.steps || 10000;
+                            return Math.min(120, Math.round(((dayDataSteps?.steps || 0) / stepsGoal) * 100));
+                          }
+                        }
+                      ];
+
+                      const visibleMetas = metaHabits.filter(m => activeAreas.includes(m.area));
+                      if (visibleMetas.length === 0) return null;
+
+                      return (
+                        <div className="mb-3 pb-3 border-b border-white/10">
+                          <p className="text-[10px] text-white/40 mb-2 flex items-center gap-1">
+                            <Zap className="w-3 h-3" /> OBJETIVOS AUTO <span className="text-[8px] ml-1">(80% = ✓)</span>
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {visibleMetas.map(meta => {
+                              const progress = meta.progress();
+                              const colors = getMetaColor(progress);
+                              const hitTarget = progress >= meta.target;
+
+                              return (
+                                <div
+                                  key={meta.id}
+                                  className={`flex items-center gap-2 p-2 rounded-lg transition-all ${colors.bgLight}`}
+                                >
+                                  <span className="text-lg">{meta.icon}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <span className={`text-xs font-medium ${colors.text}`}>{meta.name}</span>
+                                      <span className={`text-[10px] font-bold ${colors.text}`}>{progress}%</span>
+                                    </div>
+                                    <div className="relative w-full h-1.5 bg-white/10 rounded-full mt-1 overflow-hidden">
+                                      <div
+                                        className="absolute top-0 bottom-0 w-px bg-white/40"
+                                        style={{ left: `${meta.target}%` }}
+                                      />
+                                      <div
+                                        className={`h-full rounded-full transition-all ${colors.bg}`}
+                                        style={{ width: `${Math.min(progress, 100)}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                  {hitTarget && <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />}
+                                </div>
+                              );
+                            })}
                           </div>
+                        </div>
+                      );
+                    })()}
 
-                          <div className="p-4 space-y-4">
-                            {/* Title */}
-                            <input
-                              type="text"
-                              value={newDetailedTask.title}
-                              onChange={(e) => setNewDetailedTask(p => ({ ...p, title: e.target.value }))}
-                              placeholder="¿Qué necesitas hacer?"
-                              className="w-full bg-white/10 rounded-xl px-4 py-3 text-lg outline-none"
-                              autoFocus
-                            />
+                    {/* Regular habits */}
+                    {todayHabits.length > 0 ? (
+                      <div className="space-y-2">
+                        {todayHabits.map(habit => {
+                          const log = dayHabitLogs.find(l => l.habit_id === habit.id);
+                          const isCompleted = log?.completed || false;
+                          const usedMinVersion = log?.usedMinVersion || false;
+                          const streak = getStreakWithFreeze(habit.id);
+                          const missedYesterday = getMissedYesterday(habit.id);
+                          const masteryLevel = getMasteryLevel(habit.id);
+                          const stackedHabit = habit.stackedTo ? data.habits.find(h => h.id === habit.stackedTo) : null;
 
-                            {/* Description */}
-                            <textarea
-                              value={newDetailedTask.description}
-                              onChange={(e) => setNewDetailedTask(p => ({ ...p, description: e.target.value }))}
-                              placeholder="Notas o descripción..."
-                              className="w-full bg-white/10 rounded-xl px-4 py-3 text-sm outline-none h-20 resize-none"
-                            />
+                          return (
+                            <div
+                              key={habit.id}
+                              className={`relative flex items-center gap-3 p-2.5 rounded-xl transition-all
+                        ${isCompleted ? (usedMinVersion ? 'bg-emerald-500/10' : 'bg-emerald-500/20') : 'bg-white/5'}
+                        ${missedYesterday && !isCompleted ? 'ring-1 ring-red-500/50' : ''}
+                      `}
+                            >
+                              {/* Missed yesterday indicator */}
+                              {missedYesterday && !isCompleted && (
+                                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                              )}
 
-                            {/* Date */}
-                            <div>
-                              <p className="text-xs text-white/40 mb-2">Fecha</p>
-                              <div className="flex gap-2 flex-wrap">
+                              {/* Checkbox */}
+                              <button
+                                onClick={() => isViewingToday && toggleHabit(habit.id)}
+                                disabled={!isViewingToday}
+                                className={`w-9 h-9 rounded-xl border-2 flex items-center justify-center flex-shrink-0 transition-all
+                          ${isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-white/30 hover:border-emerald-400'}
+                        `}
+                              >
+                                {isCompleted ? <Check className="w-4 h-4" /> : <span className="text-lg">{habit.icon}</span>}
+                              </button>
+
+                              {/* Content */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm truncate ${isCompleted ? 'line-through text-white/50' : ''}`}>
+                                    {habit.name}
+                                  </span>
+                                  {/* Mastery dots */}
+                                  <div className="flex gap-0.5 flex-shrink-0">
+                                    {[1, 2, 3, 4, 5].map(l => (
+                                      <div key={l} className={`w-1 h-1 rounded-full ${l <= masteryLevel ? 'bg-violet-400' : 'bg-white/10'}`} />
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  {streak.current > 0 && (
+                                    <span className="text-[10px] text-orange-400">{streak.current}🔥</span>
+                                  )}
+                                  {stackedHabit && (
+                                    <span className="text-[10px] text-white/30">→ {stackedHabit.icon}</span>
+                                  )}
+                                  {habit.time && (
+                                    <span className="text-[10px] text-white/20">{habit.time}</span>
+                                  )}
+                                  {usedMinVersion && isCompleted && (
+                                    <span className="text-[10px] text-emerald-400/60">⚡ mínimo</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Min version button */}
+                              {!isCompleted && habit.minVersion && isViewingToday && (
+                                <button
+                                  onClick={() => toggleHabit(habit.id, true)}
+                                  className="px-2 py-1 bg-emerald-500/20 rounded-lg text-[10px] text-emerald-400 flex-shrink-0 hover:bg-emerald-500/30"
+                                  title={habit.minVersion}
+                                >
+                                  ⚡ 2min
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : data.habits.length > 0 ? (
+                      <div className="text-center py-4">
+                        <p className="text-white/40 text-sm">Sin hábitos para hoy</p>
+                        <p className="text-[10px] text-white/30 mt-1">
+                          {data.habits.length} hábito{data.habits.length > 1 ? 's' : ''} configurado{data.habits.length > 1 ? 's' : ''} para otros días
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-white/40 mb-2">Construye tu identidad</p>
+                        <button
+                          onClick={() => setScreen('habits')}
+                          className="text-sm text-violet-400 flex items-center gap-1 mx-auto"
+                        >
+                          <Plus className="w-4 h-4" /> Crear primer hábito
+                        </button>
+                      </div>
+                    )}
+                  </Card>
+                </AccordionSection>
+              </AnimatedMount>
+            )
+          }
+
+          {/* Work Section - EPIC VERSION */}
+          {
+            activeAreas.includes('work') && (
+              <AnimatedMount delay={150}>
+                {(() => {
+                  // Work data
+                  const workTasks = data.workTasks || [];
+                  const workProjects = data.workProjects || [];
+                  const todayTasks = workTasks.filter(t => t.dueDate === viewDate || t.scheduledDate === viewDate);
+                  const todayPending = todayTasks.filter(t => !t.completed);
+                  const todayCompleted = todayTasks.filter(t => t.completed);
+                  const q1Tasks = workTasks.filter(t => t.eisenhower === 'q1' && !t.completed);
+                  const overdueTasks = workTasks.filter(t => t.dueDate && t.dueDate < viewDate && !t.completed);
+                  const inboxTasks = workTasks.filter(t => !t.project_id && !t.dueDate && !t.completed);
+                  const doingTasks = workTasks.filter(t => t.status === 'doing' && !t.completed);
+
+                  // Deep work stats
+                  const deepWorkToday = workTasks
+                    .filter(t => t.isDeepWork && t.completed && t.completedAt?.startsWith(viewDate))
+                    .reduce((sum, t) => sum + (t.timeEstimate || 0), 0);
+                  const deepWorkGoal = data.user?.workSettings?.dailyDeepWorkGoal || 4;
+
+                  // Eat the Frog - most important task
+                  const frogTask = todayPending.find(t => t.eisenhower === 'q1') ||
+                    todayPending.find(t => t.priority === 'high') ||
+                    todayPending[0];
+
+                  const getProject = (id) => workProjects.find(p => p.id === id);
+
+                  const toggleWorkTask = (taskId) => {
+                    setData(prev => ({
+                      ...prev,
+                      workTasks: prev.workTasks.map(t =>
+                        t.id === taskId ? {
+                          ...t,
+                          completed: !t.completed,
+                          completedAt: !t.completed ? new Date().toISOString() : null,
+                          status: !t.completed ? 'done' : 'todo'
+                        } : t
+                      )
+                    }));
+                    showToast('✓ Tarea actualizada');
+                  };
+
+                  const addQuickTask = () => {
+                    if (!quickTaskInput.trim()) return;
+                    const newTask = {
+                      id: crypto.randomUUID(),
+                      title: quickTaskInput.trim(),
+                      description: '',
+                      project_id: '',
+                      priority: 'medium',
+                      eisenhower: '',
+                      status: 'backlog',
+                      timeEstimate: 30,
+                      dueDate: '',
+                      scheduledDate: '',
+                      isDeepWork: false,
+                      completed: false,
+                      completedAt: null,
+                      createdAt: new Date().toISOString()
+                    };
+                    setData(prev => ({
+                      ...prev,
+                      workTasks: [...(prev.workTasks || []), newTask]
+                    }));
+                    setQuickTaskInput('');
+                    showToast('📥 Añadido a Inbox');
+                  };
+
+                  const addDetailedTask = () => {
+                    if (!newDetailedTask.title.trim()) return;
+                    const newTask = {
+                      id: crypto.randomUUID(),
+                      ...newDetailedTask,
+                      scheduledDate: newDetailedTask.dueDate,
+                      completed: false,
+                      completedAt: null,
+                      createdAt: new Date().toISOString()
+                    };
+                    setData(prev => ({
+                      ...prev,
+                      workTasks: [...(prev.workTasks || []), newTask]
+                    }));
+                    setShowDetailedAdd(false);
+                    setNewDetailedTask({
+                      title: '', description: '', project_id: '', priority: 'medium',
+                      eisenhower: 'q2', status: 'todo', timeEstimate: 30, dueDate: viewDate, isDeepWork: false
+                    });
+                    showToast('✓ Tarea creada');
+                  };
+
+                  const updateTask = (taskId, updates) => {
+                    setData(prev => ({
+                      ...prev,
+                      workTasks: prev.workTasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
+                    }));
+                  };
+
+                  const deleteTask = (taskId) => {
+                    setData(prev => ({
+                      ...prev,
+                      workTasks: prev.workTasks.filter(t => t.id !== taskId)
+                    }));
+                    setEditingWorkTask(null);
+                    showToast('Tarea eliminada');
+                  };
+
+                  const changeTaskStatus = (taskId, newStatus) => {
+                    const updates = { status: newStatus };
+                    if (newStatus === 'done') {
+                      updates.completed = true;
+                      updates.completedAt = new Date().toISOString();
+                    }
+                    updateTask(taskId, updates);
+                    showToast('→ ' + (newStatus === 'backlog' ? 'Backlog' : newStatus === 'todo' ? 'Por hacer' : newStatus === 'doing' ? 'En progreso' : 'Hecho'));
+                  };
+
+                  const rescheduleTask = (taskId, newDate) => {
+                    updateTask(taskId, { dueDate: newDate, scheduledDate: newDate });
+                    showToast('📅 Reprogramada');
+                  };
+
+                  const startFocusTimer = (task, minutes = 25) => {
+                    setFocusTimer(task);
+                    setFocusTimeLeft(minutes * 60);
+                    showToast(`🍅 Focus: ${minutes}min en "${task.title}"`);
+                  };
+
+                  const formatTimer = (seconds) => {
+                    const m = Math.floor(seconds / 60);
+                    const s = seconds % 60;
+                    return `${m}:${s.toString().padStart(2, '0')}`;
+                  };
+
+                  // Task Item Component
+                  const TaskItem = ({ task, showActions = true, highlight = false }) => {
+                    const project = getProject(task.project_id);
+                    const isOverdue = task.dueDate && task.dueDate < today && !task.completed;
+                    const isEditing = editingWorkTask?.id === task.id;
+                    const isFocusing = focusTimer?.id === task.id;
+
+                    return (
+                      <div className={`rounded-xl transition-all ${highlight ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30' :
+                        isFocusing ? 'bg-violet-500/20 border border-violet-500/50' :
+                          isOverdue ? 'bg-red-500/10' : 'bg-white/5'
+                        } ${task.completed ? 'opacity-60' : ''}`}>
+                        <div className="flex items-start gap-3 p-3">
+                          {/* Checkbox */}
+                          <button
+                            onClick={() => toggleWorkTask(task.id)}
+                            disabled={!isViewingToday}
+                            className={`w-5 h-5 rounded-md border-2 flex items-center justify-center mt-0.5 transition-all flex-shrink-0
+                      ${task.completed ? 'bg-violet-500 border-violet-500' :
+                                task.priority === 'high' ? 'border-red-400' :
+                                  task.priority === 'medium' ? 'border-yellow-400' : 'border-white/30'}
+                    `}
+                          >
+                            {task.completed && <Check className="w-3 h-3" />}
+                          </button>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className={`text-sm font-medium ${task.completed ? 'line-through text-white/50' : ''}`}>
+                                {highlight && !task.completed && <span className="text-amber-400">🐸 </span>}
+                                {task.title}
+                              </p>
+                              {showActions && isViewingToday && !task.completed && (
+                                <button
+                                  onClick={() => setEditingWorkTask(isEditing ? null : task)}
+                                  className="p-1 hover:bg-white/10 rounded flex-shrink-0"
+                                >
+                                  <MoreHorizontal className="w-4 h-4 text-white/40" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Meta */}
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {project && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded"
+                                  style={{ backgroundColor: project.color + '30', color: project.color }}>
+                                  {project.name}
+                                </span>
+                              )}
+                              {task.eisenhower === 'q1' && <span className="text-[10px] text-red-400">🔥</span>}
+                              {task.isDeepWork && <Brain className="w-3 h-3 text-violet-400" />}
+                              {task.timeEstimate && (
+                                <span className="text-[10px] text-white/30">{task.timeEstimate}min</span>
+                              )}
+                              {isOverdue && <span className="text-[10px] text-red-400">⚠️ {task.dueDate}</span>}
+                              {isFocusing && (
+                                <span className="text-[10px] text-violet-400 font-mono bg-violet-500/20 px-1.5 rounded">
+                                  🍅 {formatTimer(focusTimeLeft)}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Status pills */}
+                            {showActions && !task.completed && isViewingToday && (
+                              <div className="flex items-center gap-1.5 mt-2">
+                                {['backlog', 'todo', 'doing', 'done'].map(status => (
+                                  <button
+                                    key={status}
+                                    onClick={() => changeTaskStatus(task.id, status)}
+                                    className={`px-2 py-0.5 rounded text-[9px] transition-all ${task.status === status ? 'bg-violet-500 text-white' : 'bg-white/10 text-white/50 hover:bg-white/20'
+                                      }`}
+                                  >
+                                    {status === 'backlog' ? '📋' : status === 'todo' ? '📌' : status === 'doing' ? '🔄' : '✅'}
+                                  </button>
+                                ))}
+                                {!isFocusing && (
+                                  <button
+                                    onClick={() => startFocusTimer(task)}
+                                    className="px-2 py-0.5 rounded text-[9px] bg-orange-500/20 text-orange-400 hover:bg-orange-500/30"
+                                  >
+                                    🍅 Focus
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Expanded actions */}
+                        {isEditing && (
+                          <div className="px-3 pb-3 pt-0 space-y-2 border-t border-white/10 mt-1">
+                            {/* Reschedule */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-white/40 w-16">Fecha:</span>
+                              <div className="flex gap-1 flex-wrap flex-1">
+                                <button onClick={() => rescheduleTask(task.id, today)}
+                                  className={`px-2 py-1 rounded text-[10px] ${task.dueDate === today ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                  Hoy
+                                </button>
+                                <button onClick={() => rescheduleTask(task.id, getDateOffset(today, 1))}
+                                  className={`px-2 py-1 rounded text-[10px] ${task.dueDate === getDateOffset(today, 1) ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                  Mañana
+                                </button>
+                                <button onClick={() => rescheduleTask(task.id, getDateOffset(today, 7))}
+                                  className="px-2 py-1 rounded text-[10px] bg-white/10">
+                                  +1 sem
+                                </button>
+                                <button onClick={() => rescheduleTask(task.id, '')}
+                                  className="px-2 py-1 rounded text-[10px] bg-white/10">
+                                  Sin fecha
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Priority */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-white/40 w-16">Prioridad:</span>
+                              <div className="flex gap-1">
+                                {['high', 'medium', 'low'].map(p => (
+                                  <button key={p} onClick={() => updateTask(task.id, { priority: p })}
+                                    className={`px-2 py-1 rounded text-[10px] ${task.priority === p ?
+                                      (p === 'high' ? 'bg-red-500' : p === 'medium' ? 'bg-yellow-500' : 'bg-blue-500') : 'bg-white/10'}`}>
+                                    {p === 'high' ? '🔴 Alta' : p === 'medium' ? '🟡 Media' : '🔵 Baja'}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Eisenhower */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-white/40 w-16">Matriz:</span>
+                              <div className="flex gap-1 flex-wrap">
                                 {[
-                                  { label: 'Hoy', value: today },
-                                  { label: 'Mañana', value: getDateOffset(today, 1) },
-                                  { label: 'Esta semana', value: getDateOffset(today, 7) },
-                                  { label: 'Sin fecha', value: '' }
-                                ].map(d => (
-                                  <button key={d.label}
-                                    onClick={() => setNewDetailedTask(p => ({ ...p, dueDate: d.value }))}
-                                    className={`px-3 py-2 rounded-xl text-sm ${newDetailedTask.dueDate === d.value ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                    {d.label}
+                                  { id: 'q1', label: '🔥 Hacer', color: 'bg-red-500' },
+                                  { id: 'q2', label: '📅 Planificar', color: 'bg-blue-500' },
+                                  { id: 'q3', label: '👤 Delegar', color: 'bg-amber-500' },
+                                  { id: 'q4', label: '🗑️ Eliminar', color: 'bg-zinc-600' }
+                                ].map(q => (
+                                  <button key={q.id} onClick={() => updateTask(task.id, { eisenhower: q.id })}
+                                    className={`px-2 py-1 rounded text-[10px] ${task.eisenhower === q.id ? q.color : 'bg-white/10'}`}>
+                                    {q.label}
                                   </button>
                                 ))}
                               </div>
                             </div>
 
                             {/* Project */}
-                            <div>
-                              <p className="text-xs text-white/40 mb-2">Proyecto</p>
-                              <div className="flex gap-2 flex-wrap">
-                                <button
-                                  onClick={() => setNewDetailedTask(p => ({ ...p, project_id: '' }))}
-                                  className={`px-3 py-2 rounded-xl text-sm ${!newDetailedTask.project_id ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                  Sin proyecto
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-white/40 w-16">Proyecto:</span>
+                              <div className="flex gap-1 flex-wrap flex-1">
+                                <button onClick={() => updateTask(task.id, { project_id: '' })}
+                                  className={`px-2 py-1 rounded text-[10px] ${!task.project_id ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                  Ninguno
                                 </button>
-                                {workProjects.map(p => (
-                                  <button key={p.id}
-                                    onClick={() => setNewDetailedTask(prev => ({ ...prev, project_id: p.id }))}
-                                    className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 ${newDetailedTask.project_id === p.id ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                {workProjects.slice(0, 4).map(p => (
+                                  <button key={p.id} onClick={() => updateTask(task.id, { project_id: p.id })}
+                                    className={`px-2 py-1 rounded text-[10px] flex items-center gap-1 ${task.project_id === p.id ? 'bg-violet-500' : 'bg-white/10'}`}>
                                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
                                     {p.name}
                                   </button>
@@ -4970,1671 +4880,1994 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                               </div>
                             </div>
 
-                            {/* Priority */}
-                            <div>
-                              <p className="text-xs text-white/40 mb-2">Prioridad</p>
-                              <div className="flex gap-2">
-                                {[
-                                  { id: 'high', label: '🔴 Alta', color: 'bg-red-500' },
-                                  { id: 'medium', label: '🟡 Media', color: 'bg-yellow-500' },
-                                  { id: 'low', label: '🔵 Baja', color: 'bg-blue-500' }
-                                ].map(p => (
-                                  <button key={p.id}
-                                    onClick={() => setNewDetailedTask(prev => ({ ...prev, priority: p.id }))}
-                                    className={`flex-1 py-2.5 rounded-xl text-sm ${newDetailedTask.priority === p.id ? p.color : 'bg-white/10'}`}>
-                                    {p.label}
-                                  </button>
-                                ))}
-                              </div>
+                            {/* Deep Work toggle */}
+                            <div className="flex items-center justify-between">
+                              <button onClick={() => updateTask(task.id, { isDeepWork: !task.isDeepWork })}
+                                className={`px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${task.isDeepWork ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                <Brain className="w-3 h-3" /> Deep Work
+                              </button>
+                              <button onClick={() => deleteTask(task.id)}
+                                className="px-3 py-1.5 rounded-lg text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                             </div>
-
-                            {/* Eisenhower */}
-                            <div>
-                              <p className="text-xs text-white/40 mb-2">Matriz Eisenhower</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                {[
-                                  { id: 'q1', label: '🔥 Hacer ya', desc: 'Urgente + Importante' },
-                                  { id: 'q2', label: '📅 Planificar', desc: 'Importante' },
-                                  { id: 'q3', label: '👤 Delegar', desc: 'Urgente' },
-                                  { id: 'q4', label: '🗑️ Eliminar', desc: 'Ninguno' }
-                                ].map(q => (
-                                  <button key={q.id}
-                                    onClick={() => setNewDetailedTask(prev => ({ ...prev, eisenhower: q.id }))}
-                                    className={`p-2 rounded-xl text-left ${newDetailedTask.eisenhower === q.id ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                    <p className="text-sm font-medium">{q.label}</p>
-                                    <p className="text-[10px] text-white/50">{q.desc}</p>
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Time estimate + Deep work */}
-                            <div className="flex gap-3">
-                              <div className="flex-1">
-                                <p className="text-xs text-white/40 mb-2">Duración</p>
-                                <div className="flex gap-1">
-                                  {[15, 30, 60, 120].map(t => (
-                                    <button key={t}
-                                      onClick={() => setNewDetailedTask(prev => ({ ...prev, timeEstimate: t }))}
-                                      className={`flex-1 py-2 rounded-xl text-xs ${newDetailedTask.timeEstimate === t ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                      {t < 60 ? `${t}m` : `${t / 60}h`}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <div>
-                                <p className="text-xs text-white/40 mb-2">Tipo</p>
-                                <button
-                                  onClick={() => setNewDetailedTask(prev => ({ ...prev, isDeepWork: !prev.isDeepWork }))}
-                                  className={`px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${newDetailedTask.isDeepWork ? 'bg-violet-500' : 'bg-white/10'}`}>
-                                  <Brain className="w-4 h-4" /> Deep
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Submit */}
-                            <button
-                              onClick={addDetailedTask}
-                              disabled={!newDetailedTask.title.trim()}
-                              className="w-full py-3 bg-violet-500 rounded-xl font-semibold hover:bg-violet-600 disabled:opacity-50 transition-all">
-                              Crear tarea
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </AccordionSection>
-                );
-              })()}
-            </AnimatedMount>
-          )}
-
-          {/* Finances Section */}
-          {activeAreas.includes('finances') && (
-            <AnimatedMount delay={175}>
-              <AccordionSection
-                title="FINANZAS"
-                icon={Wallet}
-                iconColor="text-green-400"
-                action={() => setScreen('finances')}
-                actionLabel="Ver todo"
-                storageKey="finances"
-                progress={(() => {
-                  const monthlyBudget = data.finances?.monthlyBudget || 0;
-                  if (monthlyBudget === 0) return null;
-                  const transactions = data.finances?.transactions || [];
-                  const thisMonth = viewDate.substring(0, 7);
-                  const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-                  return Math.min(100, Math.round((monthExpenses / monthlyBudget) * 100));
-                })()}
-                progressColor={(() => {
-                  const monthlyBudget = data.finances?.monthlyBudget || 0;
-                  if (monthlyBudget === 0) return 'bg-green-500';
-                  const transactions = data.finances?.transactions || [];
-                  const thisMonth = viewDate.substring(0, 7);
-                  const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-                  const pct = (monthExpenses / monthlyBudget) * 100;
-                  return pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-green-500';
-                })()}
-                urgent={(() => {
-                  const monthlyBudget = data.finances?.monthlyBudget || 0;
-                  if (monthlyBudget === 0) return false;
-                  const transactions = data.finances?.transactions || [];
-                  const thisMonth = viewDate.substring(0, 7);
-                  const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-                  return monthExpenses > monthlyBudget;
-                })()}
-                summaryRight={(() => {
-                  const transactions = data.finances?.transactions || [];
-                  const thisMonth = viewDate.substring(0, 7);
-                  const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-                  const currency = data.finances?.currency || '€';
-                  return `-${monthExpenses.toFixed(0)}${currency}`;
-                })()}
-                summary={(() => {
-                  const monthlyBudget = data.finances?.monthlyBudget || 0;
-                  const transactions = data.finances?.transactions || [];
-                  const thisMonth = viewDate.substring(0, 7);
-                  const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-                  const currency = data.finances?.currency || '€';
-                  if (monthlyBudget > 0) {
-                    const pct = Math.round((monthExpenses / monthlyBudget) * 100);
-                    const left = monthlyBudget - monthExpenses;
-                    if (left < 0) return `⚠️ Excedido ${Math.abs(left).toFixed(0)}${currency}`;
-                    return `${pct}% usado · ${left.toFixed(0)}${currency} libre`;
-                  }
-                  return 'Sin presupuesto definido';
-                })()}
-              >
-                <Card className="mt-2">
-                  {(() => {
-                    const transactions = data.finances?.transactions || [];
-                    const thisMonth = viewDate.substring(0, 7);
-                    const monthTransactions = transactions.filter(t => t.date?.startsWith(thisMonth));
-                    const monthExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-                    const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-                    const todayTransactions = transactions.filter(t => t.date === viewDate);
-                    const todayExpenses = todayTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-                    const monthlyBudget = data.finances?.monthlyBudget || 0;
-                    const budgetUsed = monthlyBudget > 0 ? Math.round((monthExpenses / monthlyBudget) * 100) : 0;
-                    const currency = data.finances?.currency || '€';
-
-                    return (
-                      <div className="space-y-3">
-                        {/* Monthly overview */}
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-white/40">Este mes</p>
-                            <p className="text-xl font-bold text-red-400">-{monthExpenses.toFixed(0)}{currency}</p>
-                          </div>
-                          {monthIncome > 0 && (
-                            <div className="text-right">
-                              <p className="text-xs text-white/40">Ingresos</p>
-                              <p className="text-lg font-bold text-green-400">+{monthIncome.toFixed(0)}{currency}</p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Budget progress */}
-                        {monthlyBudget > 0 && (
-                          <div>
-                            <div className="flex justify-between text-xs mb-1">
-                              <span className="text-white/40">Presupuesto</span>
-                              <span className={budgetUsed > 100 ? 'text-red-400' : budgetUsed > 80 ? 'text-amber-400' : 'text-emerald-400'}>
-                                {budgetUsed}% usado
-                              </span>
-                            </div>
-                            <ProgressBar
-                              value={monthExpenses}
-                              max={monthlyBudget}
-                              color={budgetUsed > 100 ? 'bg-red-500' : budgetUsed > 80 ? 'bg-amber-500' : 'bg-emerald-500'}
-                            />
-                            <p className="text-[10px] text-white/30 mt-1">
-                              {monthlyBudget - monthExpenses > 0
-                                ? `Quedan ${(monthlyBudget - monthExpenses).toFixed(0)}${currency}`
-                                : `Excedido en ${Math.abs(monthlyBudget - monthExpenses).toFixed(0)}${currency}`}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Today's transactions */}
-                        {todayTransactions.length > 0 ? (
-                          <div className="pt-2 border-t border-white/10">
-                            <p className="text-xs text-white/40 mb-2">Hoy: {todayExpenses > 0 ? `-${todayExpenses.toFixed(0)}${currency}` : 'Sin gastos'}</p>
-                            <div className="space-y-1">
-                              {todayTransactions.slice(0, 3).map(t => (
-                                <div key={t.id} className="flex items-center justify-between text-sm">
-                                  <span className="text-white/70">{t.description || t.category}</span>
-                                  <span className={t.type === 'expense' ? 'text-red-400' : 'text-green-400'}>
-                                    {t.type === 'expense' ? '-' : '+'}{t.amount}{currency}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="pt-2 border-t border-white/10 text-center">
-                            <p className="text-xs text-white/40 mb-2">Sin movimientos hoy</p>
-                            <button
-                              onClick={() => setScreen('finances')}
-                              className="text-sm text-green-400 flex items-center gap-1 mx-auto"
-                            >
-                              <Plus className="w-4 h-4" /> Añadir gasto
-                            </button>
                           </div>
                         )}
                       </div>
                     );
+                  };
+
+                  return (
+                    <AccordionSection
+                      title="TRABAJO"
+                      icon={Briefcase}
+                      iconColor="text-violet-400"
+                      action={() => setScreen('work')}
+                      actionLabel="Kanban"
+                      storageKey="work"
+                      progress={todayTasks.length > 0 ? Math.round((todayCompleted.length / todayTasks.length) * 100) : null}
+                      progressColor="bg-violet-500"
+                      urgent={overdueTasks.length > 0 || q1Tasks.length > 0}
+                      summaryRight={todayTasks.length > 0 ? `${todayCompleted.length}/${todayTasks.length}` : null}
+                      summary={(() => {
+                        if (overdueTasks.length > 0) return `⚠️ ${overdueTasks.length} vencida${overdueTasks.length > 1 ? 's' : ''}`;
+                        if (q1Tasks.length > 0) return `🔥 ${q1Tasks.length} urgente${q1Tasks.length > 1 ? 's' : ''}`;
+                        if (doingTasks.length > 0) return `🔄 ${doingTasks.length} en progreso`;
+                        if (todayPending.length > 0) return `${todayPending.length} pendiente${todayPending.length > 1 ? 's' : ''}`;
+                        if (todayCompleted.length > 0) return '✓ Todo completado';
+                        if (inboxTasks.length > 0) return `📥 ${inboxTasks.length} en inbox`;
+                        return 'Sin tareas';
+                      })()}
+                    >
+                      {/* Stats Card */}
+                      <Card className="bg-gradient-to-r from-violet-500/10 to-blue-500/10 border-violet-500/20 mb-3">
+                        <div className="flex items-center gap-4">
+                          {/* Progress Ring */}
+                          <div className="relative w-14 h-14 flex-shrink-0">
+                            <svg className="w-14 h-14 -rotate-90">
+                              <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="5" />
+                              <circle
+                                cx="28" cy="28" r="24" fill="none"
+                                stroke="#8b5cf6"
+                                strokeWidth="5"
+                                strokeLinecap="round"
+                                strokeDasharray={`${todayTasks.length > 0 ? (todayCompleted.length / todayTasks.length) * 151 : 0} 151`}
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="text-sm font-bold">
+                                {todayTasks.length > 0 ? Math.round((todayCompleted.length / todayTasks.length) * 100) : 0}%
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Stats */}
+                          <div className="flex-1 grid grid-cols-3 gap-2">
+                            <div>
+                              <p className="text-[10px] text-white/40">Hoy</p>
+                              <p className="text-lg font-bold">{todayCompleted.length}<span className="text-white/40 text-xs">/{todayTasks.length}</span></p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-white/40">En progreso</p>
+                              <p className="text-lg font-bold text-amber-400">{doingTasks.length}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-white/40">Deep Work</p>
+                              <p className="text-sm font-bold text-violet-400">
+                                {Math.floor(deepWorkToday / 60)}h{deepWorkToday % 60 > 0 ? ` ${deepWorkToday % 60}m` : ''}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Focus Timer Active */}
+                        {focusTimer && (
+                          <div className="mt-3 pt-3 border-t border-white/10">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-2xl">🍅</span>
+                                <div>
+                                  <p className="text-xs text-white/60">Enfocado en:</p>
+                                  <p className="text-sm font-medium">{focusTimer.title}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-2xl font-mono font-bold text-violet-400">
+                                  {formatTimer(focusTimeLeft)}
+                                </span>
+                                <button
+                                  onClick={() => { setFocusTimer(null); setFocusTimeLeft(0); }}
+                                  className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </Card>
+
+                      {/* Quick Add */}
+                      {isViewingToday && (
+                        <Card className="mb-3">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={quickTaskInput}
+                              onChange={(e) => setQuickTaskInput(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && addQuickTask()}
+                              placeholder="Añadir rápido a inbox..."
+                              className="flex-1 bg-white/5 rounded-xl px-3 py-2.5 text-sm outline-none focus:bg-white/10 transition-all"
+                            />
+                            <button
+                              onClick={addQuickTask}
+                              disabled={!quickTaskInput.trim()}
+                              className="px-3 py-2 bg-white/10 rounded-xl hover:bg-white/20 disabled:opacity-50 transition-all"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={() => setShowDetailedAdd(true)}
+                              className="px-3 py-2 bg-violet-500 rounded-xl hover:bg-violet-600 transition-all"
+                            >
+                              <Edit3 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </Card>
+                      )}
+
+                      {/* Tasks */}
+                      <Card>
+                        <div className="space-y-3">
+                          {/* Eat the Frog */}
+                          {frogTask && !frogTask.completed && (
+                            <div>
+                              <p className="text-[10px] text-amber-400 font-medium mb-1.5 flex items-center gap-1">
+                                🐸 EAT THE FROG
+                              </p>
+                              <TaskItem task={frogTask} highlight />
+                            </div>
+                          )}
+
+                          {/* Overdue */}
+                          {overdueTasks.length > 0 && (
+                            <div>
+                              <p className="text-[10px] text-red-400 font-medium mb-1.5 flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3" /> VENCIDAS ({overdueTasks.length})
+                              </p>
+                              <div className="space-y-2">
+                                {overdueTasks.slice(0, 3).map(task => (
+                                  <TaskItem key={task.id} task={task} />
+                                ))}
+                                {overdueTasks.length > 3 && (
+                                  <button onClick={() => setScreen('work')} className="text-xs text-red-400 pl-2">
+                                    +{overdueTasks.length - 3} más
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* In Progress */}
+                          {doingTasks.length > 0 && (
+                            <div>
+                              <p className="text-[10px] text-amber-400 font-medium mb-1.5">🔄 EN PROGRESO ({doingTasks.length})</p>
+                              <div className="space-y-2">
+                                {doingTasks.slice(0, 3).map(task => (
+                                  <TaskItem key={task.id} task={task} />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Today's remaining */}
+                          {todayPending.filter(t => t.id !== frogTask?.id && t.status !== 'doing').length > 0 && (
+                            <div>
+                              <p className="text-[10px] text-white/40 font-medium mb-1.5">
+                                HOY ({todayPending.filter(t => t.id !== frogTask?.id && t.status !== 'doing').length})
+                              </p>
+                              <div className="space-y-2">
+                                {todayPending
+                                  .filter(t => t.id !== frogTask?.id && t.status !== 'doing')
+                                  .slice(0, 4)
+                                  .map(task => (
+                                    <TaskItem key={task.id} task={task} />
+                                  ))}
+                                {todayPending.filter(t => t.id !== frogTask?.id && t.status !== 'doing').length > 4 && (
+                                  <button onClick={() => setScreen('work')} className="text-xs text-violet-400 pl-2">
+                                    +{todayPending.filter(t => t.id !== frogTask?.id && t.status !== 'doing').length - 4} más
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Completed today */}
+                          {todayCompleted.length > 0 && (
+                            <div>
+                              <p className="text-[10px] text-emerald-400 font-medium mb-1.5">✓ COMPLETADAS ({todayCompleted.length})</p>
+                              <div className="space-y-1">
+                                {todayCompleted.slice(0, 2).map(task => (
+                                  <TaskItem key={task.id} task={task} showActions={false} />
+                                ))}
+                                {todayCompleted.length > 2 && (
+                                  <p className="text-[10px] text-white/30 pl-2">+{todayCompleted.length - 2} más</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Inbox preview */}
+                          {inboxTasks.length > 0 && todayPending.length === 0 && overdueTasks.length === 0 && (
+                            <div>
+                              <p className="text-[10px] text-white/40 font-medium mb-1.5">📥 INBOX ({inboxTasks.length})</p>
+                              <div className="space-y-2">
+                                {inboxTasks.slice(0, 3).map(task => (
+                                  <TaskItem key={task.id} task={task} />
+                                ))}
+                                {inboxTasks.length > 3 && (
+                                  <button onClick={() => setScreen('work')} className="text-xs text-violet-400 pl-2">
+                                    +{inboxTasks.length - 3} por procesar
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Empty state */}
+                          {todayTasks.length === 0 && overdueTasks.length === 0 && inboxTasks.length === 0 && (
+                            <div className="text-center py-4">
+                              <p className="text-2xl mb-2">🎯</p>
+                              <p className="text-white/40">Sin tareas pendientes</p>
+                              <p className="text-[10px] text-white/30 mt-1">¡Buen trabajo!</p>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+
+                      {/* Detailed Add Modal */}
+                      {showDetailedAdd && (
+                        <div className="fixed inset-0 bg-black/80 z-50 flex items-end justify-center p-4" onClick={() => setShowDetailedAdd(false)}>
+                          <div className="bg-zinc-900 rounded-3xl w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                              <h3 className="text-lg font-semibold">Nueva tarea</h3>
+                              <button onClick={() => setShowDetailedAdd(false)} className="p-2 hover:bg-white/10 rounded-xl">
+                                <X className="w-5 h-5" />
+                              </button>
+                            </div>
+
+                            <div className="p-4 space-y-4">
+                              {/* Title */}
+                              <input
+                                type="text"
+                                value={newDetailedTask.title}
+                                onChange={(e) => setNewDetailedTask(p => ({ ...p, title: e.target.value }))}
+                                placeholder="¿Qué necesitas hacer?"
+                                className="w-full bg-white/10 rounded-xl px-4 py-3 text-lg outline-none"
+                                autoFocus
+                              />
+
+                              {/* Description */}
+                              <textarea
+                                value={newDetailedTask.description}
+                                onChange={(e) => setNewDetailedTask(p => ({ ...p, description: e.target.value }))}
+                                placeholder="Notas o descripción..."
+                                className="w-full bg-white/10 rounded-xl px-4 py-3 text-sm outline-none h-20 resize-none"
+                              />
+
+                              {/* Date */}
+                              <div>
+                                <p className="text-xs text-white/40 mb-2">Fecha</p>
+                                <div className="flex gap-2 flex-wrap">
+                                  {[
+                                    { label: 'Hoy', value: today },
+                                    { label: 'Mañana', value: getDateOffset(today, 1) },
+                                    { label: 'Esta semana', value: getDateOffset(today, 7) },
+                                    { label: 'Sin fecha', value: '' }
+                                  ].map(d => (
+                                    <button key={d.label}
+                                      onClick={() => setNewDetailedTask(p => ({ ...p, dueDate: d.value }))}
+                                      className={`px-3 py-2 rounded-xl text-sm ${newDetailedTask.dueDate === d.value ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                      {d.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Project */}
+                              <div>
+                                <p className="text-xs text-white/40 mb-2">Proyecto</p>
+                                <div className="flex gap-2 flex-wrap">
+                                  <button
+                                    onClick={() => setNewDetailedTask(p => ({ ...p, project_id: '' }))}
+                                    className={`px-3 py-2 rounded-xl text-sm ${!newDetailedTask.project_id ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                    Sin proyecto
+                                  </button>
+                                  {workProjects.map(p => (
+                                    <button key={p.id}
+                                      onClick={() => setNewDetailedTask(prev => ({ ...prev, project_id: p.id }))}
+                                      className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 ${newDetailedTask.project_id === p.id ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                                      {p.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Priority */}
+                              <div>
+                                <p className="text-xs text-white/40 mb-2">Prioridad</p>
+                                <div className="flex gap-2">
+                                  {[
+                                    { id: 'high', label: '🔴 Alta', color: 'bg-red-500' },
+                                    { id: 'medium', label: '🟡 Media', color: 'bg-yellow-500' },
+                                    { id: 'low', label: '🔵 Baja', color: 'bg-blue-500' }
+                                  ].map(p => (
+                                    <button key={p.id}
+                                      onClick={() => setNewDetailedTask(prev => ({ ...prev, priority: p.id }))}
+                                      className={`flex-1 py-2.5 rounded-xl text-sm ${newDetailedTask.priority === p.id ? p.color : 'bg-white/10'}`}>
+                                      {p.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Eisenhower */}
+                              <div>
+                                <p className="text-xs text-white/40 mb-2">Matriz Eisenhower</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {[
+                                    { id: 'q1', label: '🔥 Hacer ya', desc: 'Urgente + Importante' },
+                                    { id: 'q2', label: '📅 Planificar', desc: 'Importante' },
+                                    { id: 'q3', label: '👤 Delegar', desc: 'Urgente' },
+                                    { id: 'q4', label: '🗑️ Eliminar', desc: 'Ninguno' }
+                                  ].map(q => (
+                                    <button key={q.id}
+                                      onClick={() => setNewDetailedTask(prev => ({ ...prev, eisenhower: q.id }))}
+                                      className={`p-2 rounded-xl text-left ${newDetailedTask.eisenhower === q.id ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                      <p className="text-sm font-medium">{q.label}</p>
+                                      <p className="text-[10px] text-white/50">{q.desc}</p>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Time estimate + Deep work */}
+                              <div className="flex gap-3">
+                                <div className="flex-1">
+                                  <p className="text-xs text-white/40 mb-2">Duración</p>
+                                  <div className="flex gap-1">
+                                    {[15, 30, 60, 120].map(t => (
+                                      <button key={t}
+                                        onClick={() => setNewDetailedTask(prev => ({ ...prev, timeEstimate: t }))}
+                                        className={`flex-1 py-2 rounded-xl text-xs ${newDetailedTask.timeEstimate === t ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                        {t < 60 ? `${t}m` : `${t / 60}h`}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-white/40 mb-2">Tipo</p>
+                                  <button
+                                    onClick={() => setNewDetailedTask(prev => ({ ...prev, isDeepWork: !prev.isDeepWork }))}
+                                    className={`px-4 py-2 rounded-xl text-sm flex items-center gap-2 ${newDetailedTask.isDeepWork ? 'bg-violet-500' : 'bg-white/10'}`}>
+                                    <Brain className="w-4 h-4" /> Deep
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Submit */}
+                              <button
+                                onClick={addDetailedTask}
+                                disabled={!newDetailedTask.title.trim()}
+                                className="w-full py-3 bg-violet-500 rounded-xl font-semibold hover:bg-violet-600 disabled:opacity-50 transition-all">
+                                Crear tarea
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </AccordionSection>
+                  );
+                })()}
+              </AnimatedMount>
+            )
+          }
+
+          {/* Finances Section */}
+          {
+            activeAreas.includes('finances') && (
+              <AnimatedMount delay={175}>
+                <AccordionSection
+                  title="FINANZAS"
+                  icon={Wallet}
+                  iconColor="text-green-400"
+                  action={() => setScreen('finances')}
+                  actionLabel="Ver todo"
+                  storageKey="finances"
+                  progress={(() => {
+                    const monthlyBudget = data.finances?.monthlyBudget || 0;
+                    if (monthlyBudget === 0) return null;
+                    const transactions = data.finances?.transactions || [];
+                    const thisMonth = viewDate.substring(0, 7);
+                    const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                    return Math.min(100, Math.round((monthExpenses / monthlyBudget) * 100));
                   })()}
-                </Card>
-              </AccordionSection>
-            </AnimatedMount>
-          )}
+                  progressColor={(() => {
+                    const monthlyBudget = data.finances?.monthlyBudget || 0;
+                    if (monthlyBudget === 0) return 'bg-green-500';
+                    const transactions = data.finances?.transactions || [];
+                    const thisMonth = viewDate.substring(0, 7);
+                    const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                    const pct = (monthExpenses / monthlyBudget) * 100;
+                    return pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-green-500';
+                  })()}
+                  urgent={(() => {
+                    const monthlyBudget = data.finances?.monthlyBudget || 0;
+                    if (monthlyBudget === 0) return false;
+                    const transactions = data.finances?.transactions || [];
+                    const thisMonth = viewDate.substring(0, 7);
+                    const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                    return monthExpenses > monthlyBudget;
+                  })()}
+                  summaryRight={(() => {
+                    const transactions = data.finances?.transactions || [];
+                    const thisMonth = viewDate.substring(0, 7);
+                    const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                    const currency = data.finances?.currency || '€';
+                    return `-${monthExpenses.toFixed(0)}${currency}`;
+                  })()}
+                  summary={(() => {
+                    const monthlyBudget = data.finances?.monthlyBudget || 0;
+                    const transactions = data.finances?.transactions || [];
+                    const thisMonth = viewDate.substring(0, 7);
+                    const monthExpenses = transactions.filter(t => t.date?.startsWith(thisMonth) && t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                    const currency = data.finances?.currency || '€';
+                    if (monthlyBudget > 0) {
+                      const pct = Math.round((monthExpenses / monthlyBudget) * 100);
+                      const left = monthlyBudget - monthExpenses;
+                      if (left < 0) return `⚠️ Excedido ${Math.abs(left).toFixed(0)}${currency}`;
+                      return `${pct}% usado · ${left.toFixed(0)}${currency} libre`;
+                    }
+                    return 'Sin presupuesto definido';
+                  })()}
+                >
+                  <Card className="mt-2">
+                    {(() => {
+                      const transactions = data.finances?.transactions || [];
+                      const thisMonth = viewDate.substring(0, 7);
+                      const monthTransactions = transactions.filter(t => t.date?.startsWith(thisMonth));
+                      const monthExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                      const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+                      const todayTransactions = transactions.filter(t => t.date === viewDate);
+                      const todayExpenses = todayTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+                      const monthlyBudget = data.finances?.monthlyBudget || 0;
+                      const budgetUsed = monthlyBudget > 0 ? Math.round((monthExpenses / monthlyBudget) * 100) : 0;
+                      const currency = data.finances?.currency || '€';
+
+                      return (
+                        <div className="space-y-3">
+                          {/* Monthly overview */}
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-white/40">Este mes</p>
+                              <p className="text-xl font-bold text-red-400">-{monthExpenses.toFixed(0)}{currency}</p>
+                            </div>
+                            {monthIncome > 0 && (
+                              <div className="text-right">
+                                <p className="text-xs text-white/40">Ingresos</p>
+                                <p className="text-lg font-bold text-green-400">+{monthIncome.toFixed(0)}{currency}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Budget progress */}
+                          {monthlyBudget > 0 && (
+                            <div>
+                              <div className="flex justify-between text-xs mb-1">
+                                <span className="text-white/40">Presupuesto</span>
+                                <span className={budgetUsed > 100 ? 'text-red-400' : budgetUsed > 80 ? 'text-amber-400' : 'text-emerald-400'}>
+                                  {budgetUsed}% usado
+                                </span>
+                              </div>
+                              <ProgressBar
+                                value={monthExpenses}
+                                max={monthlyBudget}
+                                color={budgetUsed > 100 ? 'bg-red-500' : budgetUsed > 80 ? 'bg-amber-500' : 'bg-emerald-500'}
+                              />
+                              <p className="text-[10px] text-white/30 mt-1">
+                                {monthlyBudget - monthExpenses > 0
+                                  ? `Quedan ${(monthlyBudget - monthExpenses).toFixed(0)}${currency}`
+                                  : `Excedido en ${Math.abs(monthlyBudget - monthExpenses).toFixed(0)}${currency}`}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Today's transactions */}
+                          {todayTransactions.length > 0 ? (
+                            <div className="pt-2 border-t border-white/10">
+                              <p className="text-xs text-white/40 mb-2">Hoy: {todayExpenses > 0 ? `-${todayExpenses.toFixed(0)}${currency}` : 'Sin gastos'}</p>
+                              <div className="space-y-1">
+                                {todayTransactions.slice(0, 3).map(t => (
+                                  <div key={t.id} className="flex items-center justify-between text-sm">
+                                    <span className="text-white/70">{t.description || t.category}</span>
+                                    <span className={t.type === 'expense' ? 'text-red-400' : 'text-green-400'}>
+                                      {t.type === 'expense' ? '-' : '+'}{t.amount}{currency}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="pt-2 border-t border-white/10 text-center">
+                              <p className="text-xs text-white/40 mb-2">Sin movimientos hoy</p>
+                              <button
+                                onClick={() => setScreen('finances')}
+                                className="text-sm text-green-400 flex items-center gap-1 mx-auto"
+                              >
+                                <Plus className="w-4 h-4" /> Añadir gasto
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </Card>
+                </AccordionSection>
+              </AnimatedMount>
+            )
+          }
 
           {/* Insights moved to NOTIFICATIONS SECTION at top of TodayScreen */}
 
 
           {/* ==================== PERSONAL TASKS ==================== */}
-          {activeAreas.includes('personal') && (() => {
-            const personalTasks = data.personalTasks || [];
-            const personalCategories = data.personalCategories || [
-              { id: 'home', name: 'Hogar', icon: '🏠', color: '#10B981' },
-              { id: 'admin', name: 'Admin', icon: '📋', color: '#6366F1' },
-              { id: 'health', name: 'Salud', icon: '❤️', color: '#EF4444' },
-              { id: 'social', name: 'Social', icon: '👥', color: '#F59E0B' },
-              { id: 'travel', name: 'Viajes', icon: '✈️', color: '#3B82F6' },
-              { id: 'learning', name: 'Aprendizaje', icon: '📚', color: '#8B5CF6' },
-              { id: 'projects', name: 'Proyectos', icon: '🚀', color: '#EC4899' }
-            ];
+          {
+            activeAreas.includes('personal') && (() => {
+              const personalTasks = data.personalTasks || [];
+              const personalCategories = data.personalCategories || [
+                { id: 'home', name: 'Hogar', icon: '🏠', color: '#10B981' },
+                { id: 'admin', name: 'Admin', icon: '📋', color: '#6366F1' },
+                { id: 'health', name: 'Salud', icon: '❤️', color: '#EF4444' },
+                { id: 'social', name: 'Social', icon: '👥', color: '#F59E0B' },
+                { id: 'travel', name: 'Viajes', icon: '✈️', color: '#3B82F6' },
+                { id: 'learning', name: 'Aprendizaje', icon: '📚', color: '#8B5CF6' },
+                { id: 'projects', name: 'Proyectos', icon: '🚀', color: '#EC4899' }
+              ];
 
-            const todayTasks = personalTasks.filter(t => !t.completed && t.dueDate === viewDate);
-            const overdueTasks = personalTasks.filter(t => !t.completed && t.dueDate && t.dueDate < viewDate);
-            const upcomingTasks = personalTasks.filter(t => !t.completed && t.dueDate && t.dueDate > viewDate).slice(0, 2);
-            const noDueTasks = personalTasks.filter(t => !t.completed && !t.dueDate).slice(0, 2);
-            const allPending = [...overdueTasks, ...todayTasks, ...upcomingTasks.slice(0, 2), ...noDueTasks.slice(0, 1)];
-            const completedToday = personalTasks.filter(t => t.completed && t.completedAt?.startsWith(viewDate)).length;
+              const todayTasks = personalTasks.filter(t => !t.completed && t.dueDate === viewDate);
+              const overdueTasks = personalTasks.filter(t => !t.completed && t.dueDate && t.dueDate < viewDate);
+              const upcomingTasks = personalTasks.filter(t => !t.completed && t.dueDate && t.dueDate > viewDate).slice(0, 2);
+              const noDueTasks = personalTasks.filter(t => !t.completed && !t.dueDate).slice(0, 2);
+              const allPending = [...overdueTasks, ...todayTasks, ...upcomingTasks.slice(0, 2), ...noDueTasks.slice(0, 1)];
+              const completedToday = personalTasks.filter(t => t.completed && t.completedAt?.startsWith(viewDate)).length;
 
-            const getCat = (id) => personalCategories.find(c => c.id === id) || personalCategories[0];
+              const getCat = (id) => personalCategories.find(c => c.id === id) || personalCategories[0];
 
-            const togglePersonalTask = (id) => {
-              setData(prev => ({
-                ...prev,
-                personalTasks: prev.personalTasks.map(t =>
-                  t.id === id ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : null } : t
-                )
-              }));
-              showToast('✓ Tarea completada');
-            };
-
-            const toggleSubtask = (taskId, subtaskId) => {
-              setData(prev => ({
-                ...prev,
-                personalTasks: prev.personalTasks.map(t =>
-                  t.id === taskId ? {
-                    ...t,
-                    subtasks: (t.subtasks || []).map(st =>
-                      st.id === subtaskId ? { ...st, completed: !st.completed } : st
-                    )
-                  } : t
-                )
-              }));
-            };
-
-            const addSubtask = (taskId) => {
-              if (!personalNewSubtask.trim()) return;
-              setData(prev => ({
-                ...prev,
-                personalTasks: prev.personalTasks.map(t =>
-                  t.id === taskId ? {
-                    ...t,
-                    subtasks: [...(t.subtasks || []), { id: `st-${Date.now()}`, title: personalNewSubtask, completed: false }]
-                  } : t
-                )
-              }));
-              setPersonalNewSubtask('');
-            };
-
-            const addPersonalTask = () => {
-              if (!personalNewTask.title.trim()) return;
-              const newTask = {
-                id: `pt-${Date.now()}`,
-                ...personalNewTask,
-                completed: false,
-                subtasks: [],
-                notes: '',
-                createdAt: viewDate
+              const togglePersonalTask = (id) => {
+                setData(prev => ({
+                  ...prev,
+                  personalTasks: prev.personalTasks.map(t =>
+                    t.id === id ? { ...t, completed: !t.completed, completedAt: !t.completed ? new Date().toISOString() : null } : t
+                  )
+                }));
+                showToast('✓ Tarea completada');
               };
-              setData(prev => ({ ...prev, personalTasks: [...prev.personalTasks, newTask] }));
-              setPersonalNewTask({ title: '', category: 'home', dueDate: '', priority: 'medium' });
-              setPersonalShowAddTask(false);
-              showToast('✓ Tarea añadida');
-            };
 
-            return (
-              <AnimatedMount delay={180}>
-                <AccordionSection
-                  title="PERSONAL"
-                  icon={Calendar}
-                  iconColor="text-cyan-400"
-                  storageKey="personal"
-                  progress={allPending.length > 0 ? Math.round((completedToday / (completedToday + allPending.length)) * 100) : null}
-                  progressColor="bg-cyan-500"
-                  urgent={overdueTasks.length > 0}
-                  summary={
-                    overdueTasks.length > 0
-                      ? `⚠️ ${overdueTasks.length} vencida${overdueTasks.length > 1 ? 's' : ''}`
-                      : todayTasks.length > 0
-                        ? `${todayTasks.length} para hoy`
-                        : allPending.length > 0
-                          ? `${allPending.length} pendiente${allPending.length > 1 ? 's' : ''}`
-                          : '✨ Todo al día'
-                  }
-                >
-                  <div className="mt-2 space-y-2">
-                    {allPending.length === 0 && !personalShowAddTask ? (
-                      <Card className="text-center py-4">
-                        <p className="text-white/40 text-sm">Sin tareas pendientes</p>
+              const toggleSubtask = (taskId, subtaskId) => {
+                setData(prev => ({
+                  ...prev,
+                  personalTasks: prev.personalTasks.map(t =>
+                    t.id === taskId ? {
+                      ...t,
+                      subtasks: (t.subtasks || []).map(st =>
+                        st.id === subtaskId ? { ...st, completed: !st.completed } : st
+                      )
+                    } : t
+                  )
+                }));
+              };
+
+              const addSubtask = (taskId) => {
+                if (!personalNewSubtask.trim()) return;
+                setData(prev => ({
+                  ...prev,
+                  personalTasks: prev.personalTasks.map(t =>
+                    t.id === taskId ? {
+                      ...t,
+                      subtasks: [...(t.subtasks || []), { id: `st-${Date.now()}`, title: personalNewSubtask, completed: false }]
+                    } : t
+                  )
+                }));
+                setPersonalNewSubtask('');
+              };
+
+              const addPersonalTask = () => {
+                if (!personalNewTask.title.trim()) return;
+                const newTask = {
+                  id: `pt-${Date.now()}`,
+                  ...personalNewTask,
+                  completed: false,
+                  subtasks: [],
+                  notes: '',
+                  createdAt: viewDate
+                };
+                setData(prev => ({ ...prev, personalTasks: [...prev.personalTasks, newTask] }));
+                setPersonalNewTask({ title: '', category: 'home', dueDate: '', priority: 'medium' });
+                setPersonalShowAddTask(false);
+                showToast('✓ Tarea añadida');
+              };
+
+              return (
+                <AnimatedMount delay={180}>
+                  <AccordionSection
+                    title="PERSONAL"
+                    icon={Calendar}
+                    iconColor="text-cyan-400"
+                    storageKey="personal"
+                    progress={allPending.length > 0 ? Math.round((completedToday / (completedToday + allPending.length)) * 100) : null}
+                    progressColor="bg-cyan-500"
+                    urgent={overdueTasks.length > 0}
+                    summary={
+                      overdueTasks.length > 0
+                        ? `⚠️ ${overdueTasks.length} vencida${overdueTasks.length > 1 ? 's' : ''}`
+                        : todayTasks.length > 0
+                          ? `${todayTasks.length} para hoy`
+                          : allPending.length > 0
+                            ? `${allPending.length} pendiente${allPending.length > 1 ? 's' : ''}`
+                            : '✨ Todo al día'
+                    }
+                  >
+                    <div className="mt-2 space-y-2">
+                      {allPending.length === 0 && !personalShowAddTask ? (
+                        <Card className="text-center py-4">
+                          <p className="text-white/40 text-sm">Sin tareas pendientes</p>
+                          <button
+                            onClick={() => setPersonalShowAddTask(true)}
+                            className="text-cyan-400 text-sm mt-1 flex items-center gap-1 mx-auto"
+                          >
+                            <Plus className="w-4 h-4" /> Añadir
+                          </button>
+                        </Card>
+                      ) : (
+                        <>
+                          {allPending.slice(0, 5).map(task => {
+                            const cat = getCat(task.category);
+                            const isOverdue = task.dueDate && task.dueDate < viewDate;
+                            const isExpanded = personalExpandedTask === task.id;
+                            const subtasks = task.subtasks || [];
+                            const completedSubtasks = subtasks.filter(st => st.completed).length;
+
+                            return (
+                              <Card
+                                key={task.id}
+                                className={`py-2 transition-all ${isOverdue ? 'border-red-500/30' : ''} ${isExpanded ? 'border-cyan-500/50' : ''}`}
+                                style={{ borderLeftWidth: '3px', borderLeftColor: cat.color }}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    onClick={() => togglePersonalTask(task.id)}
+                                    className="w-5 h-5 rounded-full border-2 border-white/30 flex items-center justify-center hover:border-cyan-400 transition-all flex-shrink-0"
+                                  >
+                                  </button>
+                                  <div
+                                    className="flex-1 min-w-0 cursor-pointer"
+                                    onClick={() => setPersonalExpandedTask(isExpanded ? null : task.id)}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium truncate">{task.title}</p>
+                                      {subtasks.length > 0 && (
+                                        <span className="text-[10px] text-white/40 bg-white/10 px-1.5 py-0.5 rounded">
+                                          {completedSubtasks}/{subtasks.length}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-[10px]" style={{ color: cat.color }}>{cat.icon} {cat.name}</span>
+                                      {task.dueDate && (
+                                        <span className={`text-[10px] ${isOverdue ? 'text-red-400' : 'text-white/40'}`}>
+                                          {task.dueDate === viewDate ? 'Hoy' : isOverdue ? '⚠️ Vencida' : new Date(task.dueDate).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <ChevronDown className={`w-4 h-4 text-white/30 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
+                                </div>
+
+                                {/* Expanded: Subtasks */}
+                                {isExpanded && (
+                                  <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
+                                    {/* Existing subtasks */}
+                                    {subtasks.map(st => (
+                                      <div key={st.id} className="flex items-center gap-2 ml-7">
+                                        <button
+                                          onClick={() => toggleSubtask(task.id, st.id)}
+                                          className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${st.completed ? 'bg-cyan-500 border-cyan-500' : 'border-white/30'}`}
+                                        >
+                                          {st.completed && <Check className="w-3 h-3" />}
+                                        </button>
+                                        <span className={`text-sm ${st.completed ? 'text-white/40 line-through' : ''}`}>{st.title}</span>
+                                      </div>
+                                    ))}
+
+                                    {/* Add subtask */}
+                                    <div className="flex items-center gap-2 ml-7">
+                                      <input
+                                        type="text"
+                                        value={personalNewSubtask}
+                                        onChange={(e) => setPersonalNewSubtask(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && addSubtask(task.id)}
+                                        placeholder="+ Añadir subtarea..."
+                                        className="flex-1 bg-white/5 rounded px-2 py-1 text-sm"
+                                      />
+                                      {personalNewSubtask && (
+                                        <button
+                                          onClick={() => addSubtask(task.id)}
+                                          className="text-cyan-400 text-sm"
+                                        >
+                                          Añadir
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* Notes */}
+                                    {task.notes && (
+                                      <p className="text-xs text-white/40 ml-7 italic">📝 {task.notes}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </Card>
+                            );
+                          })}
+
+                          {allPending.length > 5 && (
+                            <p className="text-center text-xs text-cyan-400">
+                              +{allPending.length - 5} más
+                            </p>
+                          )}
+                        </>
+                      )}
+
+                      {/* Add task form */}
+                      {personalShowAddTask ? (
+                        <Card className="py-3 space-y-2">
+                          <input
+                            type="text"
+                            value={personalNewTask.title}
+                            onChange={(e) => setPersonalNewTask(prev => ({ ...prev, title: e.target.value }))}
+                            placeholder="¿Qué necesitas hacer?"
+                            className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm"
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <select
+                              value={personalNewTask.category}
+                              onChange={(e) => setPersonalNewTask(prev => ({ ...prev, category: e.target.value }))}
+                              className="flex-1 bg-white/5 rounded-lg px-2 py-2 text-sm"
+                            >
+                              {personalCategories.map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="date"
+                              value={personalNewTask.dueDate}
+                              onChange={(e) => setPersonalNewTask(prev => ({ ...prev, dueDate: e.target.value }))}
+                              className="flex-1 bg-white/5 rounded-lg px-2 py-2 text-sm"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setPersonalShowAddTask(false)}
+                              className="flex-1 py-2 bg-white/10 rounded-lg text-sm"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={addPersonalTask}
+                              disabled={!personalNewTask.title.trim()}
+                              className="flex-1 py-2 bg-cyan-500 rounded-lg text-sm font-medium disabled:opacity-30"
+                            >
+                              Añadir
+                            </button>
+                          </div>
+                        </Card>
+                      ) : allPending.length > 0 && (
                         <button
                           onClick={() => setPersonalShowAddTask(true)}
-                          className="text-cyan-400 text-sm mt-1 flex items-center gap-1 mx-auto"
+                          className="w-full py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-sm text-cyan-400 flex items-center justify-center gap-2"
                         >
-                          <Plus className="w-4 h-4" /> Añadir
+                          <Plus className="w-4 h-4" /> Añadir tarea
                         </button>
-                      </Card>
-                    ) : (
-                      <>
-                        {allPending.slice(0, 5).map(task => {
-                          const cat = getCat(task.category);
-                          const isOverdue = task.dueDate && task.dueDate < viewDate;
-                          const isExpanded = personalExpandedTask === task.id;
-                          const subtasks = task.subtasks || [];
-                          const completedSubtasks = subtasks.filter(st => st.completed).length;
+                      )}
+                    </div>
+                  </AccordionSection>
+                </AnimatedMount>
+              );
+            })()
+          }
+
+          {/* ==================== RELATIONSHIPS ==================== */}
+          {
+            activeAreas.includes('relationships') && (() => {
+              const relationships = data.relationships || [];
+
+              // Same categories as RelationshipsScreen
+              const categories = {
+                partner: { name: 'Pareja', icon: '💑', color: '#EC4899' },
+                family: { name: 'Familia', icon: '👨‍👩‍👧‍👦', color: '#F59E0B' },
+                friends: { name: 'Amigos', icon: '👥', color: '#3B82F6' },
+                professional: { name: 'Profesional', icon: '🤝', color: '#8B5CF6' },
+                community: { name: 'Comunidad', icon: '🌱', color: '#10B981' }
+              };
+
+              // Same love languages as RelationshipsScreen
+              const loveLanguages = {
+                words: { name: 'Palabras', icon: '💬' },
+                time: { name: 'Tiempo', icon: '⏰' },
+                gifts: { name: 'Regalos', icon: '🎁' },
+                service: { name: 'Servicio', icon: '🛠️' },
+                touch: { name: 'Contacto', icon: '🤗' }
+              };
+
+              const frequencyDays = { daily: 1, weekly: 7, biweekly: 14, monthly: 30, quarterly: 90 };
+
+              // Calculate days since last contact (using interactions array like RelationshipsScreen)
+              const getDaysSinceContact = (rel) => {
+                // Check interactions first
+                if (rel.interactions?.length > 0) {
+                  const sorted = [...rel.interactions].sort((a, b) => b.date.localeCompare(a.date));
+                  const lastDate = sorted[0].date;
+                  return Math.floor((new Date(viewDate) - new Date(lastDate)) / (1000 * 60 * 60 * 24));
+                }
+                // Fallback to lastContact field
+                if (rel.lastContact) {
+                  return Math.floor((new Date(viewDate) - new Date(rel.lastContact)) / (1000 * 60 * 60 * 24));
+                }
+                return null;
+              };
+
+              // Check if needs attention
+              const needsAttentionCheck = (rel) => {
+                const days = getDaysSinceContact(rel);
+                if (days === null) return true;
+                const targetDays = frequencyDays[rel.contactFrequency] || 7;
+                return days >= targetDays;
+              };
+
+              // Get health score (1-5)
+              const getHealthScore = (rel) => {
+                const days = getDaysSinceContact(rel);
+                if (days === null) return 1;
+                const targetDays = frequencyDays[rel.contactFrequency] || 7;
+                const ratio = days / targetDays;
+                if (ratio <= 0.5) return 5;
+                if (ratio <= 1) return 4;
+                if (ratio <= 1.5) return 3;
+                if (ratio <= 2) return 2;
+                return 1;
+              };
+
+              // Calculate who needs attention
+              const needsAttention = relationships.filter(needsAttentionCheck).sort((a, b) => {
+                const daysA = getDaysSinceContact(a) ?? 999;
+                const daysB = getDaysSinceContact(b) ?? 999;
+                return daysB - daysA;
+              });
+
+              // Upcoming birthdays (next 30 days)
+              const upcomingBirthdays = relationships.filter(r => {
+                if (!r.birthday) return false;
+                const bday = new Date(r.birthday);
+                const thisYear = new Date(viewDate);
+                thisYear.setMonth(bday.getMonth());
+                thisYear.setDate(bday.getDate());
+                if (thisYear < new Date(viewDate)) thisYear.setFullYear(thisYear.getFullYear() + 1);
+                const daysUntil = Math.floor((thisYear - new Date(viewDate)) / (1000 * 60 * 60 * 24));
+                return daysUntil >= 0 && daysUntil <= 30;
+              }).map(r => {
+                const bday = new Date(r.birthday);
+                const thisYear = new Date(viewDate);
+                thisYear.setMonth(bday.getMonth());
+                thisYear.setDate(bday.getDate());
+                if (thisYear < new Date(viewDate)) thisYear.setFullYear(thisYear.getFullYear() + 1);
+                const daysUntil = Math.floor((thisYear - new Date(viewDate)) / (1000 * 60 * 60 * 24));
+                return { ...r, daysUntil };
+              }).sort((a, b) => a.daysUntil - b.daysUntil);
+
+              // Log interaction (compatible with RelationshipsScreen)
+              const logInteraction = (relId) => {
+                const interaction = {
+                  id: `int-${Date.now()}`,
+                  date: viewDate,
+                  type: 'inperson',
+                  notes: relInteractionNote,
+                  quality: 3,
+                  timestamp: new Date().toISOString()
+                };
+                setData(prev => ({
+                  ...prev,
+                  relationships: prev.relationships.map(r =>
+                    r.id === relId ? {
+                      ...r,
+                      lastContact: viewDate,
+                      interactions: [...(r.interactions || []), interaction]
+                    } : r
+                  )
+                }));
+                setRelInteractionNote('');
+                setRelExpandedCard(null);
+                showToast('✓ Contacto registrado');
+              };
+
+              // Add new contact (compatible with RelationshipsScreen)
+              const addContact = () => {
+                if (!relNewContact.name.trim()) return;
+                const newRel = {
+                  id: `rel-${Date.now()}`,
+                  name: relNewContact.name,
+                  category: relNewContact.category,
+                  contactFrequency: relNewContact.contactFrequency,
+                  loveLanguage: relNewContact.loveLanguage || '',
+                  birthday: relNewContact.birthday || '',
+                  anniversary: '',
+                  notes: '',
+                  interests: '',
+                  pendingTopics: '',
+                  healthRating: 3,
+                  interactions: [],
+                  createdAt: new Date().toISOString()
+                };
+                setData(prev => ({ ...prev, relationships: [...(prev.relationships || []), newRel] }));
+                setRelNewContact({ name: '', category: 'friends', contactFrequency: 'weekly', birthday: '', loveLanguage: '' });
+                setRelShowAddContact(false);
+                showToast('✓ Contacto añadido');
+              };
+
+              return (
+                <AnimatedMount delay={182}>
+                  <AccordionSection
+                    title="RELACIONES"
+                    icon={Users}
+                    iconColor="text-pink-400"
+                    storageKey="relationships"
+                    action={() => setScreen('relationships')}
+                    actionLabel="Ver todo"
+                    progress={relationships.length > 0 ? Math.round(((relationships.length - needsAttention.length) / relationships.length) * 100) : null}
+                    progressColor="bg-pink-500"
+                    urgent={needsAttention.length > 2}
+                    summary={
+                      needsAttention.length > 0
+                        ? `${needsAttention.length} necesita${needsAttention.length > 1 ? 'n' : ''} atención`
+                        : upcomingBirthdays.length > 0
+                          ? `🎂 ${upcomingBirthdays[0].name} en ${upcomingBirthdays[0].daysUntil}d`
+                          : '✨ Conexiones al día'
+                    }
+                    summaryRight={relationships.length > 0 ? `${relationships.length} 👥` : null}
+                  >
+                    <div className="mt-2 space-y-2">
+
+                      {/* Upcoming birthdays alert */}
+                      {upcomingBirthdays.length > 0 && upcomingBirthdays[0].daysUntil <= 7 && (
+                        <Card className="py-2 border-amber-500/30 bg-amber-500/10">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">🎂</span>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{upcomingBirthdays[0].name}</p>
+                              <p className="text-xs text-amber-400">
+                                {upcomingBirthdays[0].daysUntil === 0 ? '¡Hoy!' : `En ${upcomingBirthdays[0].daysUntil} día${upcomingBirthdays[0].daysUntil > 1 ? 's' : ''}`}
+                              </p>
+                            </div>
+                            {upcomingBirthdays.length > 1 && (
+                              <span className="text-xs text-white/40">+{upcomingBirthdays.length - 1} más</span>
+                            )}
+                          </div>
+                        </Card>
+                      )}
+
+                      {/* Needs attention list */}
+                      {needsAttention.length > 0 ? (
+                        needsAttention.slice(0, 4).map(rel => {
+                          const cat = categories[rel.category] || categories.friends;
+                          const daysSince = getDaysSinceContact(rel);
+                          const health = getHealthScore(rel);
+                          const isExpanded = relExpandedCard === rel.id;
 
                           return (
                             <Card
-                              key={task.id}
-                              className={`py-2 transition-all ${isOverdue ? 'border-red-500/30' : ''} ${isExpanded ? 'border-cyan-500/50' : ''}`}
+                              key={rel.id}
+                              className={`py-2 transition-all ${isExpanded ? 'border-pink-500/50' : ''}`}
                               style={{ borderLeftWidth: '3px', borderLeftColor: cat.color }}
                             >
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={() => togglePersonalTask(task.id)}
-                                  className="w-5 h-5 rounded-full border-2 border-white/30 flex items-center justify-center hover:border-cyan-400 transition-all flex-shrink-0"
-                                >
-                                </button>
-                                <div
-                                  className="flex-1 min-w-0 cursor-pointer"
-                                  onClick={() => setPersonalExpandedTask(isExpanded ? null : task.id)}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium truncate">{task.title}</p>
-                                    {subtasks.length > 0 && (
-                                      <span className="text-[10px] text-white/40 bg-white/10 px-1.5 py-0.5 rounded">
-                                        {completedSubtasks}/{subtasks.length}
-                                      </span>
-                                    )}
+                              <div
+                                className="flex items-center justify-between cursor-pointer"
+                                onClick={() => setRelExpandedCard(isExpanded ? null : rel.id)}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+                                    style={{ backgroundColor: cat.color + '30' }}
+                                  >
+                                    {cat.icon}
                                   </div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px]" style={{ color: cat.color }}>{cat.icon} {cat.name}</span>
-                                    {task.dueDate && (
-                                      <span className={`text-[10px] ${isOverdue ? 'text-red-400' : 'text-white/40'}`}>
-                                        {task.dueDate === viewDate ? 'Hoy' : isOverdue ? '⚠️ Vencida' : new Date(task.dueDate).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
-                                      </span>
-                                    )}
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium">{rel.name}</p>
+                                      {rel.loveLanguage && <span className="text-xs">{loveLanguages[rel.loveLanguage]?.icon}</span>}
+                                    </div>
+                                    <p className="text-[10px] text-white/40">
+                                      {daysSince !== null ? (
+                                        daysSince === 0 ? 'Hoy' : `Hace ${daysSince} día${daysSince > 1 ? 's' : ''}`
+                                      ) : 'Sin contacto'}
+                                      <span className="mx-1">•</span>
+                                      <span style={{ color: cat.color }}>{cat.name}</span>
+                                    </p>
                                   </div>
                                 </div>
-                                <ChevronDown className={`w-4 h-4 text-white/30 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
+                                <div className="flex items-center gap-2">
+                                  {/* Health bars */}
+                                  <div className="flex gap-0.5">
+                                    {[1, 2, 3, 4, 5].map(i => (
+                                      <div
+                                        key={i}
+                                        className={`w-1 h-3 rounded-full ${i <= health ? 'bg-pink-500' : 'bg-white/10'}`}
+                                      />
+                                    ))}
+                                  </div>
+                                  <ChevronDown className={`w-4 h-4 text-white/30 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                </div>
                               </div>
 
-                              {/* Expanded: Subtasks */}
+                              {/* Expanded: Quick actions */}
                               {isExpanded && (
-                                <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
-                                  {/* Existing subtasks */}
-                                  {subtasks.map(st => (
-                                    <div key={st.id} className="flex items-center gap-2 ml-7">
-                                      <button
-                                        onClick={() => toggleSubtask(task.id, st.id)}
-                                        className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${st.completed ? 'bg-cyan-500 border-cyan-500' : 'border-white/30'}`}
-                                      >
-                                        {st.completed && <Check className="w-3 h-3" />}
-                                      </button>
-                                      <span className={`text-sm ${st.completed ? 'text-white/40 line-through' : ''}`}>{st.title}</span>
-                                    </div>
-                                  ))}
-
-                                  {/* Add subtask */}
-                                  <div className="flex items-center gap-2 ml-7">
-                                    <input
-                                      type="text"
-                                      value={personalNewSubtask}
-                                      onChange={(e) => setPersonalNewSubtask(e.target.value)}
-                                      onKeyPress={(e) => e.key === 'Enter' && addSubtask(task.id)}
-                                      placeholder="+ Añadir subtarea..."
-                                      className="flex-1 bg-white/5 rounded px-2 py-1 text-sm"
-                                    />
-                                    {personalNewSubtask && (
-                                      <button
-                                        onClick={() => addSubtask(task.id)}
-                                        className="text-cyan-400 text-sm"
-                                      >
-                                        Añadir
-                                      </button>
+                                <div className="mt-3 pt-3 border-t border-white/10 space-y-3">
+                                  {/* Info row */}
+                                  <div className="flex gap-2 text-xs">
+                                    {rel.birthday && (
+                                      <span className="px-2 py-1 bg-white/5 rounded-lg">
+                                        🎂 {new Date(rel.birthday).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
+                                      </span>
+                                    )}
+                                    {rel.contactFrequency && (
+                                      <span className="px-2 py-1 bg-white/5 rounded-lg">
+                                        🔄 {frequencyDays[rel.contactFrequency] === 1 ? 'Diario' :
+                                          frequencyDays[rel.contactFrequency] === 7 ? 'Semanal' :
+                                            frequencyDays[rel.contactFrequency] === 14 ? 'Quincenal' :
+                                              frequencyDays[rel.contactFrequency] === 30 ? 'Mensual' : 'Trimestral'}
+                                      </span>
                                     )}
                                   </div>
 
-                                  {/* Notes */}
-                                  {task.notes && (
-                                    <p className="text-xs text-white/40 ml-7 italic">📝 {task.notes}</p>
+                                  {/* Notes/Interests */}
+                                  {(rel.notes || rel.interests || rel.pendingTopics) && (
+                                    <div className="bg-white/5 rounded-lg p-2 space-y-1">
+                                      {rel.interests && (
+                                        <p className="text-xs text-white/60">
+                                          <span className="text-white/40">Intereses:</span> {rel.interests}
+                                        </p>
+                                      )}
+                                      {rel.pendingTopics && (
+                                        <p className="text-xs text-amber-400/80">
+                                          <span className="text-white/40">Pendiente:</span> {rel.pendingTopics}
+                                        </p>
+                                      )}
+                                      {rel.notes && (
+                                        <p className="text-xs text-white/50 italic">📝 {rel.notes}</p>
+                                      )}
+                                    </div>
                                   )}
+
+                                  {/* Love language tip */}
+                                  {rel.loveLanguage && (
+                                    <p className="text-[10px] text-pink-400/70 flex items-center gap-1">
+                                      💡 Tip: {loveLanguages[rel.loveLanguage]?.icon} {loveLanguages[rel.loveLanguage]?.name}
+                                    </p>
+                                  )}
+
+                                  {/* Interaction input */}
+                                  <input
+                                    type="text"
+                                    value={relInteractionNote}
+                                    onChange={(e) => setRelInteractionNote(e.target.value)}
+                                    placeholder="Nota del contacto (opcional)..."
+                                    className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm"
+                                  />
+
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => logInteraction(rel.id)}
+                                      className="flex-1 py-2 bg-pink-500 rounded-lg text-sm font-medium"
+                                    >
+                                      ✓ Registrar contacto
+                                    </button>
+                                    <button
+                                      onClick={() => setScreen('relationships')}
+                                      className="py-2 px-3 bg-white/10 rounded-lg text-sm"
+                                    >
+                                      Ver más
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </Card>
                           );
-                        })}
+                        })
+                      ) : (
+                        <Card className="py-4 text-center">
+                          <p className="text-white/40 text-sm">✨ Todas las relaciones al día</p>
+                        </Card>
+                      )}
 
-                        {allPending.length > 5 && (
-                          <p className="text-center text-xs text-cyan-400">
-                            +{allPending.length - 5} más
-                          </p>
-                        )}
-                      </>
-                    )}
+                      {needsAttention.length > 4 && (
+                        <p className="text-center text-xs text-pink-400">
+                          +{needsAttention.length - 4} más necesitan atención
+                        </p>
+                      )}
 
-                    {/* Add task form */}
-                    {personalShowAddTask ? (
-                      <Card className="py-3 space-y-2">
-                        <input
-                          type="text"
-                          value={personalNewTask.title}
-                          onChange={(e) => setPersonalNewTask(prev => ({ ...prev, title: e.target.value }))}
-                          placeholder="¿Qué necesitas hacer?"
-                          className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm"
-                          autoFocus
-                        />
-                        <div className="flex gap-2">
-                          <select
-                            value={personalNewTask.category}
-                            onChange={(e) => setPersonalNewTask(prev => ({ ...prev, category: e.target.value }))}
-                            className="flex-1 bg-white/5 rounded-lg px-2 py-2 text-sm"
-                          >
-                            {personalCategories.map(cat => (
-                              <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
-                            ))}
-                          </select>
+                      {/* Add contact button or form */}
+                      {relShowAddContact ? (
+                        <Card className="py-3 space-y-2">
                           <input
-                            type="date"
-                            value={personalNewTask.dueDate}
-                            onChange={(e) => setPersonalNewTask(prev => ({ ...prev, dueDate: e.target.value }))}
-                            className="flex-1 bg-white/5 rounded-lg px-2 py-2 text-sm"
+                            type="text"
+                            value={relNewContact.name}
+                            onChange={(e) => setRelNewContact(prev => ({ ...prev, name: e.target.value }))}
+                            placeholder="Nombre"
+                            className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm"
+                            autoFocus
                           />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setPersonalShowAddTask(false)}
-                            className="flex-1 py-2 bg-white/10 rounded-lg text-sm"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={addPersonalTask}
-                            disabled={!personalNewTask.title.trim()}
-                            className="flex-1 py-2 bg-cyan-500 rounded-lg text-sm font-medium disabled:opacity-30"
-                          >
-                            Añadir
-                          </button>
-                        </div>
-                      </Card>
-                    ) : allPending.length > 0 && (
-                      <button
-                        onClick={() => setPersonalShowAddTask(true)}
-                        className="w-full py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-sm text-cyan-400 flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" /> Añadir tarea
-                      </button>
-                    )}
-                  </div>
-                </AccordionSection>
-              </AnimatedMount>
-            );
-          })()}
-
-          {/* ==================== RELATIONSHIPS ==================== */}
-          {activeAreas.includes('relationships') && (() => {
-            const relationships = data.relationships || [];
-
-            // Same categories as RelationshipsScreen
-            const categories = {
-              partner: { name: 'Pareja', icon: '💑', color: '#EC4899' },
-              family: { name: 'Familia', icon: '👨‍👩‍👧‍👦', color: '#F59E0B' },
-              friends: { name: 'Amigos', icon: '👥', color: '#3B82F6' },
-              professional: { name: 'Profesional', icon: '🤝', color: '#8B5CF6' },
-              community: { name: 'Comunidad', icon: '🌱', color: '#10B981' }
-            };
-
-            // Same love languages as RelationshipsScreen
-            const loveLanguages = {
-              words: { name: 'Palabras', icon: '💬' },
-              time: { name: 'Tiempo', icon: '⏰' },
-              gifts: { name: 'Regalos', icon: '🎁' },
-              service: { name: 'Servicio', icon: '🛠️' },
-              touch: { name: 'Contacto', icon: '🤗' }
-            };
-
-            const frequencyDays = { daily: 1, weekly: 7, biweekly: 14, monthly: 30, quarterly: 90 };
-
-            // Calculate days since last contact (using interactions array like RelationshipsScreen)
-            const getDaysSinceContact = (rel) => {
-              // Check interactions first
-              if (rel.interactions?.length > 0) {
-                const sorted = [...rel.interactions].sort((a, b) => b.date.localeCompare(a.date));
-                const lastDate = sorted[0].date;
-                return Math.floor((new Date(viewDate) - new Date(lastDate)) / (1000 * 60 * 60 * 24));
-              }
-              // Fallback to lastContact field
-              if (rel.lastContact) {
-                return Math.floor((new Date(viewDate) - new Date(rel.lastContact)) / (1000 * 60 * 60 * 24));
-              }
-              return null;
-            };
-
-            // Check if needs attention
-            const needsAttentionCheck = (rel) => {
-              const days = getDaysSinceContact(rel);
-              if (days === null) return true;
-              const targetDays = frequencyDays[rel.contactFrequency] || 7;
-              return days >= targetDays;
-            };
-
-            // Get health score (1-5)
-            const getHealthScore = (rel) => {
-              const days = getDaysSinceContact(rel);
-              if (days === null) return 1;
-              const targetDays = frequencyDays[rel.contactFrequency] || 7;
-              const ratio = days / targetDays;
-              if (ratio <= 0.5) return 5;
-              if (ratio <= 1) return 4;
-              if (ratio <= 1.5) return 3;
-              if (ratio <= 2) return 2;
-              return 1;
-            };
-
-            // Calculate who needs attention
-            const needsAttention = relationships.filter(needsAttentionCheck).sort((a, b) => {
-              const daysA = getDaysSinceContact(a) ?? 999;
-              const daysB = getDaysSinceContact(b) ?? 999;
-              return daysB - daysA;
-            });
-
-            // Upcoming birthdays (next 30 days)
-            const upcomingBirthdays = relationships.filter(r => {
-              if (!r.birthday) return false;
-              const bday = new Date(r.birthday);
-              const thisYear = new Date(viewDate);
-              thisYear.setMonth(bday.getMonth());
-              thisYear.setDate(bday.getDate());
-              if (thisYear < new Date(viewDate)) thisYear.setFullYear(thisYear.getFullYear() + 1);
-              const daysUntil = Math.floor((thisYear - new Date(viewDate)) / (1000 * 60 * 60 * 24));
-              return daysUntil >= 0 && daysUntil <= 30;
-            }).map(r => {
-              const bday = new Date(r.birthday);
-              const thisYear = new Date(viewDate);
-              thisYear.setMonth(bday.getMonth());
-              thisYear.setDate(bday.getDate());
-              if (thisYear < new Date(viewDate)) thisYear.setFullYear(thisYear.getFullYear() + 1);
-              const daysUntil = Math.floor((thisYear - new Date(viewDate)) / (1000 * 60 * 60 * 24));
-              return { ...r, daysUntil };
-            }).sort((a, b) => a.daysUntil - b.daysUntil);
-
-            // Log interaction (compatible with RelationshipsScreen)
-            const logInteraction = (relId) => {
-              const interaction = {
-                id: `int-${Date.now()}`,
-                date: viewDate,
-                type: 'inperson',
-                notes: relInteractionNote,
-                quality: 3,
-                timestamp: new Date().toISOString()
-              };
-              setData(prev => ({
-                ...prev,
-                relationships: prev.relationships.map(r =>
-                  r.id === relId ? {
-                    ...r,
-                    lastContact: viewDate,
-                    interactions: [...(r.interactions || []), interaction]
-                  } : r
-                )
-              }));
-              setRelInteractionNote('');
-              setRelExpandedCard(null);
-              showToast('✓ Contacto registrado');
-            };
-
-            // Add new contact (compatible with RelationshipsScreen)
-            const addContact = () => {
-              if (!relNewContact.name.trim()) return;
-              const newRel = {
-                id: `rel-${Date.now()}`,
-                name: relNewContact.name,
-                category: relNewContact.category,
-                contactFrequency: relNewContact.contactFrequency,
-                loveLanguage: relNewContact.loveLanguage || '',
-                birthday: relNewContact.birthday || '',
-                anniversary: '',
-                notes: '',
-                interests: '',
-                pendingTopics: '',
-                healthRating: 3,
-                interactions: [],
-                createdAt: new Date().toISOString()
-              };
-              setData(prev => ({ ...prev, relationships: [...(prev.relationships || []), newRel] }));
-              setRelNewContact({ name: '', category: 'friends', contactFrequency: 'weekly', birthday: '', loveLanguage: '' });
-              setRelShowAddContact(false);
-              showToast('✓ Contacto añadido');
-            };
-
-            return (
-              <AnimatedMount delay={182}>
-                <AccordionSection
-                  title="RELACIONES"
-                  icon={Users}
-                  iconColor="text-pink-400"
-                  storageKey="relationships"
-                  action={() => setScreen('relationships')}
-                  actionLabel="Ver todo"
-                  progress={relationships.length > 0 ? Math.round(((relationships.length - needsAttention.length) / relationships.length) * 100) : null}
-                  progressColor="bg-pink-500"
-                  urgent={needsAttention.length > 2}
-                  summary={
-                    needsAttention.length > 0
-                      ? `${needsAttention.length} necesita${needsAttention.length > 1 ? 'n' : ''} atención`
-                      : upcomingBirthdays.length > 0
-                        ? `🎂 ${upcomingBirthdays[0].name} en ${upcomingBirthdays[0].daysUntil}d`
-                        : '✨ Conexiones al día'
-                  }
-                  summaryRight={relationships.length > 0 ? `${relationships.length} 👥` : null}
-                >
-                  <div className="mt-2 space-y-2">
-
-                    {/* Upcoming birthdays alert */}
-                    {upcomingBirthdays.length > 0 && upcomingBirthdays[0].daysUntil <= 7 && (
-                      <Card className="py-2 border-amber-500/30 bg-amber-500/10">
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">🎂</span>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{upcomingBirthdays[0].name}</p>
-                            <p className="text-xs text-amber-400">
-                              {upcomingBirthdays[0].daysUntil === 0 ? '¡Hoy!' : `En ${upcomingBirthdays[0].daysUntil} día${upcomingBirthdays[0].daysUntil > 1 ? 's' : ''}`}
-                            </p>
+                          <div className="flex gap-2">
+                            <select
+                              value={relNewContact.category}
+                              onChange={(e) => setRelNewContact(prev => ({ ...prev, category: e.target.value }))}
+                              className="flex-1"
+                            >
+                              {Object.entries(categories).map(([id, cat]) => (
+                                <option key={id} value={id}>{cat.icon} {cat.name}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={relNewContact.contactFrequency}
+                              onChange={(e) => setRelNewContact(prev => ({ ...prev, contactFrequency: e.target.value }))}
+                              className="flex-1"
+                            >
+                              <option value="daily">Diario</option>
+                              <option value="weekly">Semanal</option>
+                              <option value="biweekly">Quincenal</option>
+                              <option value="monthly">Mensual</option>
+                              <option value="quarterly">Trimestral</option>
+                            </select>
                           </div>
-                          {upcomingBirthdays.length > 1 && (
-                            <span className="text-xs text-white/40">+{upcomingBirthdays.length - 1} más</span>
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <label className="text-[10px] text-white/40 mb-1 block">Cumpleaños</label>
+                              <input
+                                type="date"
+                                value={relNewContact.birthday || ''}
+                                onChange={(e) => setRelNewContact(prev => ({ ...prev, birthday: e.target.value }))}
+                                className="w-full"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="text-[10px] text-white/40 mb-1 block">Lenguaje de amor</label>
+                              <select
+                                value={relNewContact.loveLanguage || ''}
+                                onChange={(e) => setRelNewContact(prev => ({ ...prev, loveLanguage: e.target.value }))}
+                                className="w-full"
+                              >
+                                <option value="">-- Opcional --</option>
+                                {Object.entries(loveLanguages).map(([id, lang]) => (
+                                  <option key={id} value={id}>{lang.icon} {lang.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setRelShowAddContact(false)}
+                              className="flex-1 py-2 bg-white/10 rounded-lg text-sm"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={addContact}
+                              disabled={!relNewContact.name.trim()}
+                              className="flex-1 py-2 bg-pink-500 rounded-lg text-sm font-medium disabled:opacity-30"
+                            >
+                              Añadir
+                            </button>
+                          </div>
+                        </Card>
+                      ) : (
+                        <button
+                          onClick={() => setRelShowAddContact(true)}
+                          className="w-full py-2 bg-pink-500/20 border border-pink-500/30 rounded-lg text-sm text-pink-400 flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" /> Añadir contacto
+                        </button>
+                      )}
+                    </div>
+                  </AccordionSection>
+                </AnimatedMount>
+              );
+            })()
+          }
+
+          {/* ==================== SPIRIT ==================== */}
+          {
+            activeAreas.includes('consciousness') && (() => {
+              const cons = data.consciousness || {};
+              const gratitudeToday = cons.gratitude?.[viewDate] || [];
+              const journalToday = cons.journal?.[viewDate];
+              const breathingToday = cons.breathingSessions?.filter(s => s.date === viewDate).length || 0;
+              const practiceToday = cons.practices?.find(p => p.date === viewDate);
+
+              // Path info
+              const pathId = cons.activePath;
+              const pathPaused = cons.pathPaused;
+              const startingLevel = cons.startingLevel || 0;
+              const currentLevel = cons.currentLevel || 0;
+              const effectiveLevel = startingLevel + currentLevel;
+
+              // Get path details
+              const pathsData = {
+                hawkins: { name: 'Escala de Conciencia', icon: '⚡', color: '#8B5CF6' },
+                maslow: { name: 'Pirámide de Maslow', icon: '🏔️', color: '#10B981' },
+                wilber: { name: 'Espiral Dinámica', icon: '🌀', color: '#F59E0B' }
+              };
+              const activePath = pathId ? pathsData[pathId] : null;
+
+              // Calculate gratitude streak
+              const getGratitudeStreak = () => {
+                let streak = 0;
+                let checkDate = viewDate;
+                while (cons.gratitude?.[checkDate]?.some(g => g)) {
+                  streak++;
+                  const d = new Date(checkDate);
+                  d.setDate(d.getDate() - 1);
+                  checkDate = d.toISOString().split('T')[0];
+                }
+                return streak;
+              };
+              const streak = getGratitudeStreak();
+
+              const completedItems = [
+                gratitudeToday?.filter(g => g).length >= 3,
+                !!journalToday?.text,
+                breathingToday > 0,
+                !!practiceToday
+              ].filter(Boolean).length;
+
+              // Breathing techniques
+              const breathTechniques = {
+                '478': { name: '4-7-8', inhale: 4, hold: 7, exhale: 8, holdOut: 0, rounds: 4 },
+                'box': { name: 'Box', inhale: 4, hold: 4, exhale: 4, holdOut: 4, rounds: 4 }
+              };
+
+              // Save gratitude
+              const saveConsGratitude = () => {
+                const items = consGratitudeInputs.filter(g => g.trim());
+                if (items.length === 0) return;
+                setData(prev => ({
+                  ...prev,
+                  consciousness: {
+                    ...prev.consciousness,
+                    gratitude: { ...(prev.consciousness?.gratitude || {}), [viewDate]: items }
+                  }
+                }));
+                setConsGratitudeInputs(['', '', '']);
+                setConsExpandedCard(null);
+                showToast('🙏 Gratitud guardada');
+              };
+
+              // Save journal
+              const saveConsJournal = () => {
+                if (!consJournalText.trim()) return;
+                setData(prev => ({
+                  ...prev,
+                  consciousness: {
+                    ...prev.consciousness,
+                    journal: { ...(prev.consciousness?.journal || {}), [viewDate]: { text: consJournalText, mood: consJournalMood, timestamp: new Date().toISOString() } }
+                  }
+                }));
+                setConsJournalText('');
+                setConsJournalMood(null);
+                setConsExpandedCard(null);
+                showToast('📔 Reflexión guardada');
+              };
+
+              // Complete breathing session
+              const completeBreathing = () => {
+                setData(prev => ({
+                  ...prev,
+                  consciousness: {
+                    ...prev.consciousness,
+                    breathingSessions: [...(prev.consciousness?.breathingSessions || []), { date: viewDate, technique: consBreathTechnique, timestamp: new Date().toISOString() }]
+                  }
+                }));
+                setConsBreathingActive(false);
+                setConsBreathPhase('idle');
+                setConsBreathTimer(0);
+                setConsBreathRound(0);
+                setConsExpandedCard(null);
+                showToast('🧘 Sesión completada');
+              };
+
+              const moods = [
+                { id: 'amazing', emoji: '🤩' },
+                { id: 'happy', emoji: '😊' },
+                { id: 'calm', emoji: '😌' },
+                { id: 'meh', emoji: '😐' },
+                { id: 'anxious', emoji: '😰' },
+                { id: 'sad', emoji: '😢' }
+              ];
+
+              const journalPrompts = [
+                "¿Qué te hizo sentir vivo hoy?",
+                "¿Qué aprendiste de ti mismo?",
+                "¿Por qué estás agradecido ahora?"
+              ];
+
+              // Hawkins levels for summary display
+              const hawkinsLevelNames = [
+                { name: 'Vergüenza', calibration: 20 },
+                { name: 'Culpa', calibration: 30 },
+                { name: 'Apatía', calibration: 50 },
+                { name: 'Pena', calibration: 75 },
+                { name: 'Miedo', calibration: 100 },
+                { name: 'Deseo', calibration: 125 },
+                { name: 'Ira', calibration: 150 },
+                { name: 'Orgullo', calibration: 175 },
+                { name: 'Coraje', calibration: 200 },
+                { name: 'Neutralidad', calibration: 250 },
+                { name: 'Voluntad', calibration: 310 },
+                { name: 'Aceptación', calibration: 350 },
+                { name: 'Razón', calibration: 400 },
+                { name: 'Amor', calibration: 500 },
+                { name: 'Alegría', calibration: 540 },
+                { name: 'Paz', calibration: 600 },
+                { name: 'Iluminación', calibration: '700+' }
+              ];
+              const currentLevelData = pathId === 'hawkins' ? hawkinsLevelNames[effectiveLevel] : null;
+
+              return (
+                <AnimatedMount delay={185}>
+                  <AccordionSection
+                    title="CONSCIENCIA"
+                    icon={Sparkles}
+                    iconColor="text-violet-400"
+                    storageKey="consciousness"
+                    progress={Math.round((completedItems / 4) * 100)}
+                    progressColor="bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                    summary={
+                      activePath && !pathPaused
+                        ? `${currentLevelData?.name || 'Nivel ' + (effectiveLevel + 1)} • Cal. ${currentLevelData?.calibration || ''}`
+                        : completedItems > 0
+                          ? `${completedItems}/4 prácticas`
+                          : 'Empieza tu práctica'
+                    }
+                    summaryRight={streak > 0 ? `🔥 ${streak}` : null}
+                  >
+                    <div className="mt-2 space-y-2">
+
+                      {/* GRATITUDE - Expandable */}
+                      <Card
+                        className={`py-2 transition-all ${gratitudeToday?.length >= 3 ? 'border-emerald-500/30' : ''} ${consExpandedCard === 'gratitude' ? 'border-violet-500/50' : ''}`}
+                      >
+                        <div
+                          className="flex items-center justify-between cursor-pointer"
+                          onClick={() => setConsExpandedCard(consExpandedCard === 'gratitude' ? null : 'gratitude')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg ${gratitudeToday?.length >= 3 ? 'bg-emerald-500/20' : 'bg-violet-500/20'} flex items-center justify-center`}>
+                              <span className="text-lg">🙏</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">Gratitud</p>
+                              <p className="text-[10px] text-white/40">
+                                {gratitudeToday?.length || 0}/3 escritas
+                                {streak > 1 && <span className="text-amber-400 ml-2">🔥 {streak}</span>}
+                              </p>
+                            </div>
+                          </div>
+                          {gratitudeToday?.length >= 3 ? (
+                            <Check className="w-5 h-5 text-emerald-400" />
+                          ) : (
+                            <ChevronDown className={`w-5 h-5 text-white/30 transition-transform ${consExpandedCard === 'gratitude' ? 'rotate-180' : ''}`} />
                           )}
                         </div>
-                      </Card>
-                    )}
 
-                    {/* Needs attention list */}
-                    {needsAttention.length > 0 ? (
-                      needsAttention.slice(0, 4).map(rel => {
-                        const cat = categories[rel.category] || categories.friends;
-                        const daysSince = getDaysSinceContact(rel);
-                        const health = getHealthScore(rel);
-                        const isExpanded = relExpandedCard === rel.id;
+                        {/* Expanded: Gratitude inputs */}
+                        {consExpandedCard === 'gratitude' && (
+                          <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
+                            {gratitudeToday?.length >= 3 ? (
+                              <div className="space-y-1">
+                                {gratitudeToday.map((g, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-sm text-white/70">
+                                    <span className="text-emerald-400">✓</span>
+                                    <span>{g}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <>
+                                {consGratitudeInputs.map((input, i) => (
+                                  <input
+                                    key={i}
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => {
+                                      const newInputs = [...consGratitudeInputs];
+                                      newInputs[i] = e.target.value;
+                                      setConsGratitudeInputs(newInputs);
+                                    }}
+                                    placeholder={`${i + 1}. Agradezco...`}
+                                    className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm"
+                                  />
+                                ))}
+                                <button
+                                  onClick={saveConsGratitude}
+                                  disabled={!consGratitudeInputs.some(g => g.trim())}
+                                  className="w-full py-2 bg-violet-500 rounded-lg text-sm font-medium disabled:opacity-30"
+                                >
+                                  Guardar
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </Card>
+
+                      {/* JOURNAL - Expandable */}
+                      <Card
+                        className={`py-2 transition-all ${journalToday?.text ? 'border-amber-500/30' : ''} ${consExpandedCard === 'journal' ? 'border-violet-500/50' : ''}`}
+                      >
+                        <div
+                          className="flex items-center justify-between cursor-pointer"
+                          onClick={() => setConsExpandedCard(consExpandedCard === 'journal' ? null : 'journal')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg ${journalToday?.text ? 'bg-amber-500/20' : 'bg-violet-500/20'} flex items-center justify-center`}>
+                              <span className="text-lg">📔</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">Reflexión</p>
+                              <p className="text-[10px] text-white/40">
+                                {journalToday?.text ? `${journalToday.mood ? moods.find(m => m.id === journalToday.mood)?.emoji : ''} Escrito` : 'Reflexiona tu día'}
+                              </p>
+                            </div>
+                          </div>
+                          {journalToday?.text ? (
+                            <Check className="w-5 h-5 text-amber-400" />
+                          ) : (
+                            <ChevronDown className={`w-5 h-5 text-white/30 transition-transform ${consExpandedCard === 'journal' ? 'rotate-180' : ''}`} />
+                          )}
+                        </div>
+
+                        {/* Expanded: Journal input */}
+                        {consExpandedCard === 'journal' && (
+                          <div className="mt-3 pt-3 border-t border-white/10 space-y-3">
+                            {journalToday?.text ? (
+                              <div className="bg-white/5 rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-lg">{moods.find(m => m.id === journalToday.mood)?.emoji}</span>
+                                </div>
+                                <p className="text-sm text-white/70">{journalToday.text}</p>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="bg-violet-500/10 rounded-lg p-2">
+                                  <p className="text-xs text-violet-400 italic">
+                                    "{journalPrompts[new Date().getDay() % journalPrompts.length]}"
+                                  </p>
+                                </div>
+                                <div className="flex gap-1 justify-center">
+                                  {moods.map(mood => (
+                                    <button
+                                      key={mood.id}
+                                      onClick={() => setConsJournalMood(mood.id)}
+                                      className={`p-1.5 rounded-lg text-lg transition-all ${consJournalMood === mood.id ? 'bg-violet-500 scale-110' : 'bg-white/5'}`}
+                                    >
+                                      {mood.emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                                <textarea
+                                  value={consJournalText}
+                                  onChange={(e) => setConsJournalText(e.target.value)}
+                                  placeholder="Escribe tu reflexión..."
+                                  rows={3}
+                                  className="w-full bg-white/5 rounded-lg p-3 text-sm resize-none"
+                                />
+                                <button
+                                  onClick={saveConsJournal}
+                                  disabled={!consJournalText.trim()}
+                                  className="w-full py-2 bg-violet-500 rounded-lg text-sm font-medium disabled:opacity-30"
+                                >
+                                  Guardar
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </Card>
+
+                      {/* BREATHING - Expandable */}
+                      <Card
+                        className={`py-2 transition-all ${breathingToday > 0 ? 'border-blue-500/30' : ''} ${consExpandedCard === 'breathing' ? 'border-violet-500/50' : ''}`}
+                      >
+                        <div
+                          className="flex items-center justify-between cursor-pointer"
+                          onClick={() => !consBreathingActive && setConsExpandedCard(consExpandedCard === 'breathing' ? null : 'breathing')}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg ${breathingToday > 0 ? 'bg-blue-500/20' : 'bg-violet-500/20'} flex items-center justify-center`}>
+                              <span className="text-lg">🧘</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">Respiración</p>
+                              <p className="text-[10px] text-white/40">
+                                {consBreathingActive
+                                  ? `${breathTechniques[consBreathTechnique].name} - ${consBreathPhase}`
+                                  : breathingToday > 0
+                                    ? `${breathingToday} sesión${breathingToday > 1 ? 'es' : ''} hoy`
+                                    : 'Calma tu mente'}
+                              </p>
+                            </div>
+                          </div>
+                          {breathingToday > 0 && !consBreathingActive ? (
+                            <Check className="w-5 h-5 text-blue-400" />
+                          ) : (
+                            <ChevronDown className={`w-5 h-5 text-white/30 transition-transform ${consExpandedCard === 'breathing' ? 'rotate-180' : ''}`} />
+                          )}
+                        </div>
+
+                        {/* Expanded: Breathing */}
+                        {(consExpandedCard === 'breathing' || consBreathingActive) && (
+                          <div className="mt-3 pt-3 border-t border-white/10">
+                            {!consBreathingActive ? (
+                              <div className="space-y-3">
+                                <div className="flex gap-2">
+                                  {Object.entries(breathTechniques).map(([id, tech]) => (
+                                    <button
+                                      key={id}
+                                      onClick={() => setConsBreathTechnique(id)}
+                                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${consBreathTechnique === id ? 'bg-violet-500' : 'bg-white/10'}`}
+                                    >
+                                      {tech.name}
+                                    </button>
+                                  ))}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    setConsBreathingActive(true);
+                                    setConsBreathPhase('inhale');
+                                    setConsBreathTimer(0);
+                                    setConsBreathRound(0);
+                                  }}
+                                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg font-medium"
+                                >
+                                  Comenzar
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-center py-4">
+                                <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-3 transition-all duration-1000 ${consBreathPhase === 'inhale' ? 'scale-110 bg-blue-500/40' :
+                                  consBreathPhase === 'hold' ? 'scale-110 bg-violet-500/40' :
+                                    consBreathPhase === 'exhale' ? 'scale-90 bg-cyan-500/40' :
+                                      'scale-90 bg-white/10'
+                                  }`}>
+                                  <div className="text-center">
+                                    <p className="text-xs text-white/50 capitalize">{consBreathPhase}</p>
+                                    <p className="text-2xl font-bold">{Math.ceil(consBreathTimer)}</p>
+                                  </div>
+                                </div>
+                                <p className="text-xs text-white/40 mb-3">
+                                  Ronda {consBreathRound + 1} / {breathTechniques[consBreathTechnique].rounds}
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setConsBreathingActive(false);
+                                      setConsBreathPhase('idle');
+                                      setConsBreathTimer(0);
+                                      setConsBreathRound(0);
+                                    }}
+                                    className="flex-1 py-2 bg-white/10 rounded-lg text-sm"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    onClick={completeBreathing}
+                                    className="flex-1 py-2 bg-emerald-500 rounded-lg text-sm font-medium"
+                                  >
+                                    Completar
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </Card>
+
+                      {/* Active Path - Expandable with practice */}
+                      {activePath && !pathPaused && (() => {
+                        // Hawkins levels data with full content for TodayScreen
+                        const hawkinsLevels = [
+                          {
+                            name: 'Vergüenza', calibration: 20, minimumDays: 14,
+                            teaching: 'La vergüenza es el nivel más bajo de consciencia. Aquí sientes que eres fundamentalmente defectuoso, que hay algo mal en tu existencia misma.',
+                            signs: ['Evitas mirarte al espejo o en fotos', 'Sientes que no mereces cosas buenas', 'Te escondes de situaciones sociales'],
+                            trap: 'Creer que si te escondes lo suficiente, el dolor desaparecerá.',
+                            exit: 'Reconocer que la vergüenza es una emoción, no una verdad sobre quién eres.',
+                            practice: 'Hoy, cuando notes vergüenza, no huyas. Respira y di: "Esto también es parte de ser humano."',
+                            affirmation: 'Tengo derecho a existir, incluso con mis imperfecciones.',
+                            journalQuestion: '¿Qué parte de mí he estado escondiendo por vergüenza?'
+                          },
+                          {
+                            name: 'Culpa', calibration: 30, minimumDays: 14,
+                            teaching: 'En culpa, ya no te escondes pero te castigas. Crees que mereces sufrir por lo que hiciste o dejaste de hacer.',
+                            signs: ['Te disculpas excesivamente', 'Revives errores pasados constantemente', 'Sientes que debes compensar algo'],
+                            trap: 'Pensar que sufrir lo suficiente eventualmente te redimirá.',
+                            exit: 'Entender que el perdón (especialmente el auto-perdón) es posible.',
+                            practice: 'Escribe una carta de perdón a ti mismo por algo que aún te pesa. No tienes que enviarla.',
+                            affirmation: 'Merezco perdón, empezando por el mío propio.',
+                            journalQuestion: '¿Qué error pasado sigo cargando que ya es hora de soltar?'
+                          },
+                          {
+                            name: 'Apatía', calibration: 50, minimumDays: 14,
+                            teaching: 'La apatía es desesperanza cristalizada. Ya no sientes vergüenza ni culpa porque dejaste de intentar.',
+                            signs: ['Nada parece importar', 'Dices "¿para qué?" frecuentemente', 'Descuidas tu cuidado personal'],
+                            trap: 'La comodidad de no intentar nada para no fallar en nada.',
+                            exit: 'Una chispa de deseo, aunque sea pequeña: querer algo.',
+                            practice: 'Haz UNA cosa pequeña hoy, aunque no "sientas" hacerla. Lava un plato. Da una vuelta a la manzana.',
+                            affirmation: 'Cada pequeño paso cuenta, aunque no lo sienta.',
+                            journalQuestion: '¿Qué pequeña cosa me gustaría que fuera diferente?'
+                          },
+                          {
+                            name: 'Pena', calibration: 75, minimumDays: 10,
+                            teaching: 'En pena hay energía de nuevo, pero es energía de pérdida. Sientes, y lo que sientes es tristeza.',
+                            signs: ['Lloras con facilidad o desearías poder llorar', 'Vives en el pasado', 'Sientes un vacío persistente'],
+                            trap: 'Identificarte con tus pérdidas, hacer de la tristeza tu identidad.',
+                            exit: 'Permitir la tristeza sin aferrarte a ella. Dejarla fluir.',
+                            practice: 'Permite 5 minutos de tristeza consciente. Pon un timer si quieres. Después, nota que sigues aquí.',
+                            affirmation: 'Mis pérdidas me han formado, pero no me definen.',
+                            journalQuestion: '¿Qué pérdida necesito honrar y comenzar a soltar?'
+                          },
+                          {
+                            name: 'Miedo', calibration: 100, minimumDays: 10,
+                            teaching: 'El miedo indica que hay algo que valoras lo suficiente como para temer perderlo. Es energía de supervivencia.',
+                            signs: ['Anticipas lo peor constantemente', 'Evitas situaciones por "si acaso"', 'Tu cuerpo está frecuentemente tenso'],
+                            trap: 'Organizar tu vida alrededor de evitar lo que temes.',
+                            exit: 'Descubrir que puedes sentir miedo y actuar de todos modos.',
+                            practice: 'Identifica UN miedo concreto hoy. Pregúntate: "¿Qué haría si no tuviera este miedo?"',
+                            affirmation: 'El miedo es información, no una orden.',
+                            journalQuestion: '¿Qué haría diferente si no tuviera miedo?'
+                          },
+                          {
+                            name: 'Deseo', calibration: 125, minimumDays: 10,
+                            teaching: 'El deseo es la primera energía realmente hacia afuera. Quieres algo. El problema es que crees que eso te completará.',
+                            signs: ['Siempre quieres más de algo', 'La satisfacción dura poco', 'Comparas lo que tienes con lo que otros tienen'],
+                            trap: 'Creer que el próximo logro/compra/relación finalmente te hará feliz.',
+                            exit: 'Distinguir entre deseos del ego y necesidades genuinas.',
+                            practice: 'Nota tres deseos que surjan hoy. Por cada uno pregunta: "¿Qué necesidad más profunda hay debajo?"',
+                            affirmation: 'Mis deseos me señalan algo, pero no me controlan.',
+                            journalQuestion: '¿Qué creo que me falta para estar completo?'
+                          },
+                          {
+                            name: 'Ira', calibration: 150, minimumDays: 10,
+                            teaching: 'La ira es poder. Por primera vez tienes energía para cambiar las cosas. El riesgo es destruir en vez de construir.',
+                            signs: ['Te frustras fácilmente', 'Culpas a otros de tus problemas', 'Sientes que el mundo es injusto contigo'],
+                            trap: 'Quedarte en la queja y el resentimiento sin pasar a la acción constructiva.',
+                            exit: 'Canalizar la energía de la ira hacia cambio real, no hacia destrucción.',
+                            practice: 'Canaliza la energía de cualquier frustración en algo físico: limpia, ordena, camina rápido.',
+                            affirmation: 'Mi ira tiene un mensaje; puedo escucharlo sin ser consumido.',
+                            journalQuestion: '¿Qué me está diciendo mi ira que necesita cambiar?'
+                          },
+                          {
+                            name: 'Orgullo', calibration: 175, minimumDays: 10,
+                            teaching: 'El orgullo se siente bien comparado con los niveles anteriores. Pero depende de circunstancias externas y de compararte con otros.',
+                            signs: ['Necesitas tener razón', 'Te cuesta admitir errores', 'Tu autoestima sube y baja según logros'],
+                            trap: 'Basar tu valor en ser "mejor que" otros.',
+                            exit: 'Desarrollar autoestima basada en quién eres, no en cómo te comparas.',
+                            practice: 'Practica decir "no sé" o "me equivoqué" al menos una vez hoy, genuinamente.',
+                            affirmation: 'No necesito tener razón para tener valor.',
+                            journalQuestion: '¿En qué área necesito soltar la necesidad de tener razón?'
+                          },
+                          {
+                            name: 'Coraje', calibration: 200, minimumDays: 7,
+                            teaching: '¡Felicidades! Cruzaste la línea del 200. Aquí la vida deja de ser algo que te pasa y empieza a ser algo que creas.',
+                            signs: ['Tomas responsabilidad de tu vida', 'Ves problemas como desafíos', 'Actúas a pesar del miedo'],
+                            trap: 'Forzar resultados, creer que todo depende solo de tu esfuerzo.',
+                            exit: 'Combinar acción con aceptación de lo que no controlas.',
+                            practice: 'Haz algo que te dé un poco de miedo pero que sabes que es correcto. Empieza pequeño.',
+                            affirmation: 'Tengo el poder de cambiar mi vida, un paso a la vez.',
+                            journalQuestion: '¿Qué acción he estado postergando por miedo?'
+                          },
+                          {
+                            name: 'Neutralidad', calibration: 250, minimumDays: 7,
+                            teaching: 'En neutralidad descubres que puedes estar bien independientemente de las circunstancias. Dejas de necesitar que las cosas sean de cierta manera.',
+                            signs: ['Los problemas te afectan menos', 'Eres flexible ante cambios', 'No necesitas controlar todo'],
+                            trap: 'Confundir desapego con indiferencia.',
+                            exit: 'Mantener preferencias sin convertirlas en exigencias.',
+                            practice: 'Ante cada situación hoy, pausa y pregunta: "¿Puedo estar bien sin importar cómo resulte esto?"',
+                            affirmation: 'Estoy bien independientemente de las circunstancias.',
+                            journalQuestion: '¿A qué resultado estoy demasiado apegado?'
+                          },
+                          {
+                            name: 'Voluntad', calibration: 310, minimumDays: 7,
+                            teaching: 'La voluntad es decir SÍ a la vida. No es fuerza de voluntad (eso es coraje), es disponibilidad genuina.',
+                            signs: ['Estás abierto a aprender', 'Dices sí más que no', 'La vida fluye más fácilmente'],
+                            trap: 'Decir sí a todo sin discernimiento.',
+                            exit: 'Desarrollar criterio sobre dónde poner tu energía.',
+                            practice: 'Di "sí" genuinamente a algo que normalmente resistirías. Observa qué cambia.',
+                            affirmation: 'La vida me apoya cuando yo apoyo a la vida.',
+                            journalQuestion: '¿A qué he estado diciendo "no" que podría intentar?'
+                          },
+                          {
+                            name: 'Aceptación', calibration: 350, minimumDays: 7,
+                            teaching: 'Aceptación no es resignación. Es trabajar con la realidad tal como es, no como desearías que fuera.',
+                            signs: ['No luchas contra lo que es', 'Ves la perfección en la imperfección', 'Perdonas con más facilidad'],
+                            trap: 'Usar aceptación como excusa para no actuar.',
+                            exit: 'Aceptar Y actuar: trabajar desde donde estás hacia donde quieres ir.',
+                            practice: 'Elige una situación difícil y di internamente: "Esto es lo que es. ¿Qué puedo hacer desde aquí?"',
+                            affirmation: 'Acepto la realidad tal como es y trabajo desde ahí.',
+                            journalQuestion: '¿Qué situación estoy resistiendo que necesito aceptar primero?'
+                          },
+                          {
+                            name: 'Razón', calibration: 400, minimumDays: 7,
+                            teaching: 'La razón es el pico del intelecto. Aquí puedes entender sistemas complejos y ver patrones que otros no ven.',
+                            signs: ['Analizas las cosas profundamente', 'Valoras datos y lógica', 'Puedes ver múltiples perspectivas'],
+                            trap: 'Creer que todo puede entenderse con la mente. Parálisis por análisis.',
+                            exit: 'Reconocer los límites del intelecto. Abrirse a otras formas de conocer.',
+                            practice: 'Ante un problema, separa hechos de interpretaciones. Lista ambos en columnas separadas.',
+                            affirmation: 'Mi mente es una herramienta poderosa al servicio de algo mayor.',
+                            journalQuestion: '¿Dónde estoy sobre-analizando en vez de actuar o sentir?'
+                          },
+                          {
+                            name: 'Amor', calibration: 500, minimumDays: 7,
+                            teaching: 'Amor incondicional. No es una emoción, es una forma de ver. Ves la esencia detrás de las formas.',
+                            signs: ['Sientes conexión con extraños', 'Ves lo mejor en las personas', 'El perdón es natural'],
+                            trap: 'Negar el mal o el sufrimiento por querer ver solo amor.',
+                            exit: 'Integrar amor con discernimiento. Amar no significa permitir todo.',
+                            practice: 'Envía genuinamente buenos deseos a alguien difícil. No por ellos, sino por lo que hace en ti.',
+                            affirmation: 'El amor no es algo que busco; es lo que soy cuando dejo de buscar.',
+                            journalQuestion: '¿A quién me cuesta amar y qué me enseña eso de mí?'
+                          },
+                          {
+                            name: 'Alegría', calibration: 540, minimumDays: 7,
+                            teaching: 'La alegría no depende de nada externo. Es el estado natural cuando dejas de interferir.',
+                            signs: ['Sonríes sin razón aparente', 'Todo parece más vivo y brillante', 'La gratitud es constante'],
+                            trap: 'Apegarte a la alegría y temerle a perderla.',
+                            exit: 'Dejar que la alegría venga y vaya sin aferrarte.',
+                            practice: 'Busca la perfección oculta en algo "ordinario" hoy: una taza de café, la luz en una ventana.',
+                            affirmation: 'La alegría está disponible ahora, sin condiciones.',
+                            journalQuestion: '¿Dónde estoy buscando alegría fuera cuando ya está aquí?'
+                          },
+                          {
+                            name: 'Paz', calibration: 600, minimumDays: 7,
+                            teaching: 'La paz trasciende la alegría. No hay nada que lograr, nada que probar. Todo simplemente es.',
+                            signs: ['Silencio mental profundo', 'Sensación de completitud', 'El tiempo parece diferente'],
+                            trap: 'Quedarse en la paz sin compartirla.',
+                            exit: 'Permitir que la paz se exprese a través de ti hacia el mundo.',
+                            practice: 'Dedica 10 minutos a no hacer nada. No meditar, no respirar conscientemente. Solo ser.',
+                            affirmation: 'La paz no es algo que logro; es lo que queda cuando dejo de luchar.',
+                            journalQuestion: '¿Qué pasaría si dejara de esforzarme por un momento?'
+                          },
+                          {
+                            name: 'Iluminación', calibration: '700+', minimumDays: 7,
+                            teaching: 'La consciencia pura. No hay separación entre tú y el todo. Extremadamente raro de forma permanente.',
+                            signs: ['No hay "yo" separado', 'Todo es percibido como uno', 'Presencia radiante natural'],
+                            trap: 'No hay trampa aquí. Pero tampoco hay nadie para quedar atrapado.',
+                            exit: 'No hay salida porque no hay lugar adonde ir.',
+                            practice: 'Vive este día como si cada momento fuera exactamente como debe ser. Porque lo es.',
+                            affirmation: 'Todo es uno. No hay nada que buscar.',
+                            journalQuestion: '¿Quién soy cuando dejo de definirme?'
+                          }
+                        ];
+
+                        const currentLevelData = hawkinsLevels[effectiveLevel] || hawkinsLevels[0];
+
+                        // Calculate days in level
+                        const practicesInLevel = (cons.practices || []).filter(p =>
+                          p.pathId === pathId && p.levelName === currentLevelData.name
+                        );
+                        const daysWithPractice = new Set(practicesInLevel.map(p => p.date)).size;
+                        const minDays = currentLevelData.minimumDays || 7;
+
+                        // XP calculation
+                        const currentXP = cons.currentXP || 0;
+                        const xpForNextLevel = 100 * (currentLevel + 1);
+
+                        // Log practice function
+                        const logConsPractice = () => {
+                          setData(prev => ({
+                            ...prev,
+                            consciousness: {
+                              ...prev.consciousness,
+                              practices: [
+                                ...(prev.consciousness?.practices || []),
+                                {
+                                  id: Date.now(),
+                                  date: viewDate,
+                                  pathId: pathId,
+                                  levelName: currentLevelData.name,
+                                  practice: currentLevelData.practice,
+                                  notes: consPracticeNotes,
+                                  xp: 25,
+                                  timestamp: new Date().toISOString()
+                                }
+                              ],
+                              totalXP: (prev.consciousness?.totalXP || 0) + 25,
+                              currentXP: (prev.consciousness?.currentXP || 0) + 25
+                            }
+                          }));
+                          setConsPracticeNotes('');
+                          setConsExpandedCard(null);
+                          showToast('⚡ +25 XP - Práctica completada');
+                        };
 
                         return (
                           <Card
-                            key={rel.id}
-                            className={`py-2 transition-all ${isExpanded ? 'border-pink-500/50' : ''}`}
-                            style={{ borderLeftWidth: '3px', borderLeftColor: cat.color }}
+                            className={`py-2 border-violet-500/30 bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 transition-all ${consExpandedCard === 'practice' ? 'border-violet-500/50' : ''}`}
                           >
                             <div
                               className="flex items-center justify-between cursor-pointer"
-                              onClick={() => setRelExpandedCard(isExpanded ? null : rel.id)}
+                              onClick={() => setConsExpandedCard(consExpandedCard === 'practice' ? null : 'practice')}
                             >
                               <div className="flex items-center gap-3">
-                                <div
-                                  className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
-                                  style={{ backgroundColor: cat.color + '30' }}
-                                >
-                                  {cat.icon}
+                                <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
+                                  <span className="text-lg">{activePath.icon}</span>
                                 </div>
                                 <div>
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium">{rel.name}</p>
-                                    {rel.loveLanguage && <span className="text-xs">{loveLanguages[rel.loveLanguage]?.icon}</span>}
-                                  </div>
+                                  <p className="text-sm font-medium">{currentLevelData.name}</p>
                                   <p className="text-[10px] text-white/40">
-                                    {daysSince !== null ? (
-                                      daysSince === 0 ? 'Hoy' : `Hace ${daysSince} día${daysSince > 1 ? 's' : ''}`
-                                    ) : 'Sin contacto'}
-                                    <span className="mx-1">•</span>
-                                    <span style={{ color: cat.color }}>{cat.name}</span>
+                                    Nivel {effectiveLevel + 1} • Cal. {currentLevelData.calibration}
+                                    {practiceToday && <span className="text-emerald-400 ml-2">✓ Hecho</span>}
                                   </p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                {/* Health bars */}
-                                <div className="flex gap-0.5">
-                                  {[1, 2, 3, 4, 5].map(i => (
-                                    <div
-                                      key={i}
-                                      className={`w-1 h-3 rounded-full ${i <= health ? 'bg-pink-500' : 'bg-white/10'}`}
-                                    />
-                                  ))}
-                                </div>
-                                <ChevronDown className={`w-4 h-4 text-white/30 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                              </div>
+                              {practiceToday ? (
+                                <Check className="w-5 h-5 text-violet-400" />
+                              ) : (
+                                <ChevronDown className={`w-5 h-5 text-white/30 transition-transform ${consExpandedCard === 'practice' ? 'rotate-180' : ''}`} />
+                              )}
                             </div>
 
-                            {/* Expanded: Quick actions */}
-                            {isExpanded && (
+                            {/* Expanded: Full level content */}
+                            {consExpandedCard === 'practice' && (
                               <div className="mt-3 pt-3 border-t border-white/10 space-y-3">
-                                {/* Info row */}
-                                <div className="flex gap-2 text-xs">
-                                  {rel.birthday && (
-                                    <span className="px-2 py-1 bg-white/5 rounded-lg">
-                                      🎂 {new Date(rel.birthday).toLocaleDateString('es', { day: 'numeric', month: 'short' })}
-                                    </span>
-                                  )}
-                                  {rel.contactFrequency && (
-                                    <span className="px-2 py-1 bg-white/5 rounded-lg">
-                                      🔄 {frequencyDays[rel.contactFrequency] === 1 ? 'Diario' :
-                                        frequencyDays[rel.contactFrequency] === 7 ? 'Semanal' :
-                                          frequencyDays[rel.contactFrequency] === 14 ? 'Quincenal' :
-                                            frequencyDays[rel.contactFrequency] === 30 ? 'Mensual' : 'Trimestral'}
-                                    </span>
-                                  )}
+
+                                {/* Progress stats */}
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-1 bg-white/5 rounded-lg p-2 text-center">
+                                    <p className="text-lg font-bold">{daysWithPractice}</p>
+                                    <p className="text-[10px] text-white/40">días practicando</p>
+                                  </div>
+                                  <div className="flex-1 bg-white/5 rounded-lg p-2 text-center">
+                                    <p className="text-lg font-bold">{minDays}</p>
+                                    <p className="text-[10px] text-white/40">mínimo</p>
+                                  </div>
+                                  <div className="flex-1 bg-white/5 rounded-lg p-2 text-center">
+                                    <p className="text-lg font-bold">{currentXP}</p>
+                                    <p className="text-[10px] text-white/40">XP</p>
+                                  </div>
                                 </div>
 
-                                {/* Notes/Interests */}
-                                {(rel.notes || rel.interests || rel.pendingTopics) && (
-                                  <div className="bg-white/5 rounded-lg p-2 space-y-1">
-                                    {rel.interests && (
-                                      <p className="text-xs text-white/60">
-                                        <span className="text-white/40">Intereses:</span> {rel.interests}
+                                {/* XP Progress bar */}
+                                <div>
+                                  <div className="flex justify-between text-[10px] text-white/40 mb-1">
+                                    <span>Progreso XP</span>
+                                    <span>{currentXP}/{xpForNextLevel}</span>
+                                  </div>
+                                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all"
+                                      style={{ width: `${Math.min(100, (currentXP / xpForNextLevel) * 100)}%` }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Teaching */}
+                                <div className="bg-white/5 rounded-lg p-3">
+                                  <p className="text-xs text-violet-400 mb-1">📖 Enseñanza</p>
+                                  <p className="text-xs text-white/70 leading-relaxed">{currentLevelData.teaching}</p>
+                                </div>
+
+                                {/* Signs */}
+                                <div className="bg-amber-500/10 rounded-lg p-3">
+                                  <p className="text-xs text-amber-400 mb-2">⚡ Señales de este nivel</p>
+                                  <div className="space-y-1">
+                                    {currentLevelData.signs.map((sign, i) => (
+                                      <p key={i} className="text-xs text-white/60 flex items-start gap-2">
+                                        <span className="text-amber-400">•</span> {sign}
                                       </p>
-                                    )}
-                                    {rel.pendingTopics && (
-                                      <p className="text-xs text-amber-400/80">
-                                        <span className="text-white/40">Pendiente:</span> {rel.pendingTopics}
-                                      </p>
-                                    )}
-                                    {rel.notes && (
-                                      <p className="text-xs text-white/50 italic">📝 {rel.notes}</p>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Trap & Exit */}
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="bg-red-500/10 rounded-lg p-2">
+                                    <p className="text-[10px] text-red-400 mb-1">🚫 Trampa</p>
+                                    <p className="text-[10px] text-white/60">{currentLevelData.trap}</p>
+                                  </div>
+                                  <div className="bg-emerald-500/10 rounded-lg p-2">
+                                    <p className="text-[10px] text-emerald-400 mb-1">🚪 Salida</p>
+                                    <p className="text-[10px] text-white/60">{currentLevelData.exit}</p>
+                                  </div>
+                                </div>
+
+                                {/* Journal Question */}
+                                <div className="bg-cyan-500/10 rounded-lg p-3">
+                                  <p className="text-xs text-cyan-400 mb-1">💭 Pregunta de reflexión</p>
+                                  <p className="text-sm italic text-white/70">"{currentLevelData.journalQuestion}"</p>
+                                </div>
+
+                                {/* Practice section */}
+                                {practiceToday ? (
+                                  <div className="bg-emerald-500/10 rounded-lg p-3">
+                                    <p className="text-xs text-emerald-400 mb-1">✓ Práctica completada hoy</p>
+                                    <p className="text-xs text-white/60">{practiceToday.practice}</p>
+                                    {practiceToday.notes && (
+                                      <p className="text-xs text-white/40 mt-2 italic">"{practiceToday.notes}"</p>
                                     )}
                                   </div>
+                                ) : (
+                                  <>
+                                    <div className="bg-violet-500/10 rounded-lg p-3">
+                                      <p className="text-xs text-violet-400 mb-1">🎯 Práctica del día</p>
+                                      <p className="text-sm text-white/80">{currentLevelData.practice}</p>
+                                    </div>
+
+                                    <div className="bg-white/5 rounded-lg p-2">
+                                      <p className="text-xs italic text-white/50">"{currentLevelData.affirmation}"</p>
+                                    </div>
+
+                                    <textarea
+                                      value={consPracticeNotes}
+                                      onChange={(e) => setConsPracticeNotes(e.target.value)}
+                                      placeholder="Notas sobre tu práctica (opcional)..."
+                                      rows={2}
+                                      className="w-full bg-white/5 rounded-lg p-2 text-sm resize-none"
+                                    />
+
+                                    <button
+                                      onClick={logConsPractice}
+                                      className="w-full py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-lg text-sm font-medium"
+                                    >
+                                      Completar práctica (+25 XP)
+                                    </button>
+                                  </>
                                 )}
 
-                                {/* Love language tip */}
-                                {rel.loveLanguage && (
-                                  <p className="text-[10px] text-pink-400/70 flex items-center gap-1">
-                                    💡 Tip: {loveLanguages[rel.loveLanguage]?.icon} {loveLanguages[rel.loveLanguage]?.name}
-                                  </p>
-                                )}
-
-                                {/* Interaction input */}
-                                <input
-                                  type="text"
-                                  value={relInteractionNote}
-                                  onChange={(e) => setRelInteractionNote(e.target.value)}
-                                  placeholder="Nota del contacto (opcional)..."
-                                  className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm"
-                                />
-
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => logInteraction(rel.id)}
-                                    className="flex-1 py-2 bg-pink-500 rounded-lg text-sm font-medium"
-                                  >
-                                    ✓ Registrar contacto
-                                  </button>
-                                  <button
-                                    onClick={() => setScreen('relationships')}
-                                    className="py-2 px-3 bg-white/10 rounded-lg text-sm"
-                                  >
-                                    Ver más
-                                  </button>
-                                </div>
+                                {/* Link to full screen */}
+                                <button
+                                  onClick={() => setScreen('consciousness')}
+                                  className="w-full py-1.5 text-xs text-violet-400 hover:text-violet-300"
+                                >
+                                  Ver camino completo →
+                                </button>
                               </div>
                             )}
                           </Card>
                         );
-                      })
-                    ) : (
-                      <Card className="py-4 text-center">
-                        <p className="text-white/40 text-sm">✨ Todas las relaciones al día</p>
-                      </Card>
-                    )}
+                      })()}
 
-                    {needsAttention.length > 4 && (
-                      <p className="text-center text-xs text-pink-400">
-                        +{needsAttention.length - 4} más necesitan atención
-                      </p>
-                    )}
-
-                    {/* Add contact button or form */}
-                    {relShowAddContact ? (
-                      <Card className="py-3 space-y-2">
-                        <input
-                          type="text"
-                          value={relNewContact.name}
-                          onChange={(e) => setRelNewContact(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="Nombre"
-                          className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm"
-                          autoFocus
-                        />
-                        <div className="flex gap-2">
-                          <select
-                            value={relNewContact.category}
-                            onChange={(e) => setRelNewContact(prev => ({ ...prev, category: e.target.value }))}
-                            className="flex-1"
-                          >
-                            {Object.entries(categories).map(([id, cat]) => (
-                              <option key={id} value={id}>{cat.icon} {cat.name}</option>
-                            ))}
-                          </select>
-                          <select
-                            value={relNewContact.contactFrequency}
-                            onChange={(e) => setRelNewContact(prev => ({ ...prev, contactFrequency: e.target.value }))}
-                            className="flex-1"
-                          >
-                            <option value="daily">Diario</option>
-                            <option value="weekly">Semanal</option>
-                            <option value="biweekly">Quincenal</option>
-                            <option value="monthly">Mensual</option>
-                            <option value="quarterly">Trimestral</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-2">
-                          <div className="flex-1">
-                            <label className="text-[10px] text-white/40 mb-1 block">Cumpleaños</label>
-                            <input
-                              type="date"
-                              value={relNewContact.birthday || ''}
-                              onChange={(e) => setRelNewContact(prev => ({ ...prev, birthday: e.target.value }))}
-                              className="w-full"
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <label className="text-[10px] text-white/40 mb-1 block">Lenguaje de amor</label>
-                            <select
-                              value={relNewContact.loveLanguage || ''}
-                              onChange={(e) => setRelNewContact(prev => ({ ...prev, loveLanguage: e.target.value }))}
-                              className="w-full"
-                            >
-                              <option value="">-- Opcional --</option>
-                              {Object.entries(loveLanguages).map(([id, lang]) => (
-                                <option key={id} value={id}>{lang.icon} {lang.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setRelShowAddContact(false)}
-                            className="flex-1 py-2 bg-white/10 rounded-lg text-sm"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={addContact}
-                            disabled={!relNewContact.name.trim()}
-                            className="flex-1 py-2 bg-pink-500 rounded-lg text-sm font-medium disabled:opacity-30"
-                          >
-                            Añadir
-                          </button>
-                        </div>
-                      </Card>
-                    ) : (
-                      <button
-                        onClick={() => setRelShowAddContact(true)}
-                        className="w-full py-2 bg-pink-500/20 border border-pink-500/30 rounded-lg text-sm text-pink-400 flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" /> Añadir contacto
-                      </button>
-                    )}
-                  </div>
-                </AccordionSection>
-              </AnimatedMount>
-            );
-          })()}
-
-          {/* ==================== SPIRIT ==================== */}
-          {activeAreas.includes('consciousness') && (() => {
-            const cons = data.consciousness || {};
-            const gratitudeToday = cons.gratitude?.[viewDate] || [];
-            const journalToday = cons.journal?.[viewDate];
-            const breathingToday = cons.breathingSessions?.filter(s => s.date === viewDate).length || 0;
-            const practiceToday = cons.practices?.find(p => p.date === viewDate);
-
-            // Path info
-            const pathId = cons.activePath;
-            const pathPaused = cons.pathPaused;
-            const startingLevel = cons.startingLevel || 0;
-            const currentLevel = cons.currentLevel || 0;
-            const effectiveLevel = startingLevel + currentLevel;
-
-            // Get path details
-            const pathsData = {
-              hawkins: { name: 'Escala de Conciencia', icon: '⚡', color: '#8B5CF6' },
-              maslow: { name: 'Pirámide de Maslow', icon: '🏔️', color: '#10B981' },
-              wilber: { name: 'Espiral Dinámica', icon: '🌀', color: '#F59E0B' }
-            };
-            const activePath = pathId ? pathsData[pathId] : null;
-
-            // Calculate gratitude streak
-            const getGratitudeStreak = () => {
-              let streak = 0;
-              let checkDate = viewDate;
-              while (cons.gratitude?.[checkDate]?.some(g => g)) {
-                streak++;
-                const d = new Date(checkDate);
-                d.setDate(d.getDate() - 1);
-                checkDate = d.toISOString().split('T')[0];
-              }
-              return streak;
-            };
-            const streak = getGratitudeStreak();
-
-            const completedItems = [
-              gratitudeToday?.filter(g => g).length >= 3,
-              !!journalToday?.text,
-              breathingToday > 0,
-              !!practiceToday
-            ].filter(Boolean).length;
-
-            // Breathing techniques
-            const breathTechniques = {
-              '478': { name: '4-7-8', inhale: 4, hold: 7, exhale: 8, holdOut: 0, rounds: 4 },
-              'box': { name: 'Box', inhale: 4, hold: 4, exhale: 4, holdOut: 4, rounds: 4 }
-            };
-
-            // Save gratitude
-            const saveConsGratitude = () => {
-              const items = consGratitudeInputs.filter(g => g.trim());
-              if (items.length === 0) return;
-              setData(prev => ({
-                ...prev,
-                consciousness: {
-                  ...prev.consciousness,
-                  gratitude: { ...(prev.consciousness?.gratitude || {}), [viewDate]: items }
-                }
-              }));
-              setConsGratitudeInputs(['', '', '']);
-              setConsExpandedCard(null);
-              showToast('🙏 Gratitud guardada');
-            };
-
-            // Save journal
-            const saveConsJournal = () => {
-              if (!consJournalText.trim()) return;
-              setData(prev => ({
-                ...prev,
-                consciousness: {
-                  ...prev.consciousness,
-                  journal: { ...(prev.consciousness?.journal || {}), [viewDate]: { text: consJournalText, mood: consJournalMood, timestamp: new Date().toISOString() } }
-                }
-              }));
-              setConsJournalText('');
-              setConsJournalMood(null);
-              setConsExpandedCard(null);
-              showToast('📔 Reflexión guardada');
-            };
-
-            // Complete breathing session
-            const completeBreathing = () => {
-              setData(prev => ({
-                ...prev,
-                consciousness: {
-                  ...prev.consciousness,
-                  breathingSessions: [...(prev.consciousness?.breathingSessions || []), { date: viewDate, technique: consBreathTechnique, timestamp: new Date().toISOString() }]
-                }
-              }));
-              setConsBreathingActive(false);
-              setConsBreathPhase('idle');
-              setConsBreathTimer(0);
-              setConsBreathRound(0);
-              setConsExpandedCard(null);
-              showToast('🧘 Sesión completada');
-            };
-
-            const moods = [
-              { id: 'amazing', emoji: '🤩' },
-              { id: 'happy', emoji: '😊' },
-              { id: 'calm', emoji: '😌' },
-              { id: 'meh', emoji: '😐' },
-              { id: 'anxious', emoji: '😰' },
-              { id: 'sad', emoji: '😢' }
-            ];
-
-            const journalPrompts = [
-              "¿Qué te hizo sentir vivo hoy?",
-              "¿Qué aprendiste de ti mismo?",
-              "¿Por qué estás agradecido ahora?"
-            ];
-
-            // Hawkins levels for summary display
-            const hawkinsLevelNames = [
-              { name: 'Vergüenza', calibration: 20 },
-              { name: 'Culpa', calibration: 30 },
-              { name: 'Apatía', calibration: 50 },
-              { name: 'Pena', calibration: 75 },
-              { name: 'Miedo', calibration: 100 },
-              { name: 'Deseo', calibration: 125 },
-              { name: 'Ira', calibration: 150 },
-              { name: 'Orgullo', calibration: 175 },
-              { name: 'Coraje', calibration: 200 },
-              { name: 'Neutralidad', calibration: 250 },
-              { name: 'Voluntad', calibration: 310 },
-              { name: 'Aceptación', calibration: 350 },
-              { name: 'Razón', calibration: 400 },
-              { name: 'Amor', calibration: 500 },
-              { name: 'Alegría', calibration: 540 },
-              { name: 'Paz', calibration: 600 },
-              { name: 'Iluminación', calibration: '700+' }
-            ];
-            const currentLevelData = pathId === 'hawkins' ? hawkinsLevelNames[effectiveLevel] : null;
-
-            return (
-              <AnimatedMount delay={185}>
-                <AccordionSection
-                  title="CONSCIENCIA"
-                  icon={Sparkles}
-                  iconColor="text-violet-400"
-                  storageKey="consciousness"
-                  progress={Math.round((completedItems / 4) * 100)}
-                  progressColor="bg-gradient-to-r from-violet-500 to-fuchsia-500"
-                  summary={
-                    activePath && !pathPaused
-                      ? `${currentLevelData?.name || 'Nivel ' + (effectiveLevel + 1)} • Cal. ${currentLevelData?.calibration || ''}`
-                      : completedItems > 0
-                        ? `${completedItems}/4 prácticas`
-                        : 'Empieza tu práctica'
-                  }
-                  summaryRight={streak > 0 ? `🔥 ${streak}` : null}
-                >
-                  <div className="mt-2 space-y-2">
-
-                    {/* GRATITUDE - Expandable */}
-                    <Card
-                      className={`py-2 transition-all ${gratitudeToday?.length >= 3 ? 'border-emerald-500/30' : ''} ${consExpandedCard === 'gratitude' ? 'border-violet-500/50' : ''}`}
-                    >
-                      <div
-                        className="flex items-center justify-between cursor-pointer"
-                        onClick={() => setConsExpandedCard(consExpandedCard === 'gratitude' ? null : 'gratitude')}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg ${gratitudeToday?.length >= 3 ? 'bg-emerald-500/20' : 'bg-violet-500/20'} flex items-center justify-center`}>
-                            <span className="text-lg">🙏</span>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">Gratitud</p>
-                            <p className="text-[10px] text-white/40">
-                              {gratitudeToday?.length || 0}/3 escritas
-                              {streak > 1 && <span className="text-amber-400 ml-2">🔥 {streak}</span>}
-                            </p>
-                          </div>
-                        </div>
-                        {gratitudeToday?.length >= 3 ? (
-                          <Check className="w-5 h-5 text-emerald-400" />
-                        ) : (
-                          <ChevronDown className={`w-5 h-5 text-white/30 transition-transform ${consExpandedCard === 'gratitude' ? 'rotate-180' : ''}`} />
-                        )}
-                      </div>
-
-                      {/* Expanded: Gratitude inputs */}
-                      {consExpandedCard === 'gratitude' && (
-                        <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
-                          {gratitudeToday?.length >= 3 ? (
-                            <div className="space-y-1">
-                              {gratitudeToday.map((g, i) => (
-                                <div key={i} className="flex items-center gap-2 text-sm text-white/70">
-                                  <span className="text-emerald-400">✓</span>
-                                  <span>{g}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <>
-                              {consGratitudeInputs.map((input, i) => (
-                                <input
-                                  key={i}
-                                  type="text"
-                                  value={input}
-                                  onChange={(e) => {
-                                    const newInputs = [...consGratitudeInputs];
-                                    newInputs[i] = e.target.value;
-                                    setConsGratitudeInputs(newInputs);
-                                  }}
-                                  placeholder={`${i + 1}. Agradezco...`}
-                                  className="w-full bg-white/5 rounded-lg px-3 py-2 text-sm"
-                                />
-                              ))}
-                              <button
-                                onClick={saveConsGratitude}
-                                disabled={!consGratitudeInputs.some(g => g.trim())}
-                                className="w-full py-2 bg-violet-500 rounded-lg text-sm font-medium disabled:opacity-30"
-                              >
-                                Guardar
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </Card>
-
-                    {/* JOURNAL - Expandable */}
-                    <Card
-                      className={`py-2 transition-all ${journalToday?.text ? 'border-amber-500/30' : ''} ${consExpandedCard === 'journal' ? 'border-violet-500/50' : ''}`}
-                    >
-                      <div
-                        className="flex items-center justify-between cursor-pointer"
-                        onClick={() => setConsExpandedCard(consExpandedCard === 'journal' ? null : 'journal')}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg ${journalToday?.text ? 'bg-amber-500/20' : 'bg-violet-500/20'} flex items-center justify-center`}>
-                            <span className="text-lg">📔</span>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">Reflexión</p>
-                            <p className="text-[10px] text-white/40">
-                              {journalToday?.text ? `${journalToday.mood ? moods.find(m => m.id === journalToday.mood)?.emoji : ''} Escrito` : 'Reflexiona tu día'}
-                            </p>
-                          </div>
-                        </div>
-                        {journalToday?.text ? (
-                          <Check className="w-5 h-5 text-amber-400" />
-                        ) : (
-                          <ChevronDown className={`w-5 h-5 text-white/30 transition-transform ${consExpandedCard === 'journal' ? 'rotate-180' : ''}`} />
-                        )}
-                      </div>
-
-                      {/* Expanded: Journal input */}
-                      {consExpandedCard === 'journal' && (
-                        <div className="mt-3 pt-3 border-t border-white/10 space-y-3">
-                          {journalToday?.text ? (
-                            <div className="bg-white/5 rounded-lg p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-lg">{moods.find(m => m.id === journalToday.mood)?.emoji}</span>
-                              </div>
-                              <p className="text-sm text-white/70">{journalToday.text}</p>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="bg-violet-500/10 rounded-lg p-2">
-                                <p className="text-xs text-violet-400 italic">
-                                  "{journalPrompts[new Date().getDay() % journalPrompts.length]}"
-                                </p>
-                              </div>
-                              <div className="flex gap-1 justify-center">
-                                {moods.map(mood => (
-                                  <button
-                                    key={mood.id}
-                                    onClick={() => setConsJournalMood(mood.id)}
-                                    className={`p-1.5 rounded-lg text-lg transition-all ${consJournalMood === mood.id ? 'bg-violet-500 scale-110' : 'bg-white/5'}`}
-                                  >
-                                    {mood.emoji}
-                                  </button>
-                                ))}
-                              </div>
-                              <textarea
-                                value={consJournalText}
-                                onChange={(e) => setConsJournalText(e.target.value)}
-                                placeholder="Escribe tu reflexión..."
-                                rows={3}
-                                className="w-full bg-white/5 rounded-lg p-3 text-sm resize-none"
-                              />
-                              <button
-                                onClick={saveConsJournal}
-                                disabled={!consJournalText.trim()}
-                                className="w-full py-2 bg-violet-500 rounded-lg text-sm font-medium disabled:opacity-30"
-                              >
-                                Guardar
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </Card>
-
-                    {/* BREATHING - Expandable */}
-                    <Card
-                      className={`py-2 transition-all ${breathingToday > 0 ? 'border-blue-500/30' : ''} ${consExpandedCard === 'breathing' ? 'border-violet-500/50' : ''}`}
-                    >
-                      <div
-                        className="flex items-center justify-between cursor-pointer"
-                        onClick={() => !consBreathingActive && setConsExpandedCard(consExpandedCard === 'breathing' ? null : 'breathing')}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg ${breathingToday > 0 ? 'bg-blue-500/20' : 'bg-violet-500/20'} flex items-center justify-center`}>
-                            <span className="text-lg">🧘</span>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium">Respiración</p>
-                            <p className="text-[10px] text-white/40">
-                              {consBreathingActive
-                                ? `${breathTechniques[consBreathTechnique].name} - ${consBreathPhase}`
-                                : breathingToday > 0
-                                  ? `${breathingToday} sesión${breathingToday > 1 ? 'es' : ''} hoy`
-                                  : 'Calma tu mente'}
-                            </p>
-                          </div>
-                        </div>
-                        {breathingToday > 0 && !consBreathingActive ? (
-                          <Check className="w-5 h-5 text-blue-400" />
-                        ) : (
-                          <ChevronDown className={`w-5 h-5 text-white/30 transition-transform ${consExpandedCard === 'breathing' ? 'rotate-180' : ''}`} />
-                        )}
-                      </div>
-
-                      {/* Expanded: Breathing */}
-                      {(consExpandedCard === 'breathing' || consBreathingActive) && (
-                        <div className="mt-3 pt-3 border-t border-white/10">
-                          {!consBreathingActive ? (
-                            <div className="space-y-3">
-                              <div className="flex gap-2">
-                                {Object.entries(breathTechniques).map(([id, tech]) => (
-                                  <button
-                                    key={id}
-                                    onClick={() => setConsBreathTechnique(id)}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${consBreathTechnique === id ? 'bg-violet-500' : 'bg-white/10'}`}
-                                  >
-                                    {tech.name}
-                                  </button>
-                                ))}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setConsBreathingActive(true);
-                                  setConsBreathPhase('inhale');
-                                  setConsBreathTimer(0);
-                                  setConsBreathRound(0);
-                                }}
-                                className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg font-medium"
-                              >
-                                Comenzar
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="text-center py-4">
-                              <div className={`w-24 h-24 mx-auto rounded-full flex items-center justify-center mb-3 transition-all duration-1000 ${consBreathPhase === 'inhale' ? 'scale-110 bg-blue-500/40' :
-                                consBreathPhase === 'hold' ? 'scale-110 bg-violet-500/40' :
-                                  consBreathPhase === 'exhale' ? 'scale-90 bg-cyan-500/40' :
-                                    'scale-90 bg-white/10'
-                                }`}>
-                                <div className="text-center">
-                                  <p className="text-xs text-white/50 capitalize">{consBreathPhase}</p>
-                                  <p className="text-2xl font-bold">{Math.ceil(consBreathTimer)}</p>
-                                </div>
-                              </div>
-                              <p className="text-xs text-white/40 mb-3">
-                                Ronda {consBreathRound + 1} / {breathTechniques[consBreathTechnique].rounds}
-                              </p>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => {
-                                    setConsBreathingActive(false);
-                                    setConsBreathPhase('idle');
-                                    setConsBreathTimer(0);
-                                    setConsBreathRound(0);
-                                  }}
-                                  className="flex-1 py-2 bg-white/10 rounded-lg text-sm"
-                                >
-                                  Cancelar
-                                </button>
-                                <button
-                                  onClick={completeBreathing}
-                                  className="flex-1 py-2 bg-emerald-500 rounded-lg text-sm font-medium"
-                                >
-                                  Completar
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </Card>
-
-                    {/* Active Path - Expandable with practice */}
-                    {activePath && !pathPaused && (() => {
-                      // Hawkins levels data with full content for TodayScreen
-                      const hawkinsLevels = [
-                        {
-                          name: 'Vergüenza', calibration: 20, minimumDays: 14,
-                          teaching: 'La vergüenza es el nivel más bajo de consciencia. Aquí sientes que eres fundamentalmente defectuoso, que hay algo mal en tu existencia misma.',
-                          signs: ['Evitas mirarte al espejo o en fotos', 'Sientes que no mereces cosas buenas', 'Te escondes de situaciones sociales'],
-                          trap: 'Creer que si te escondes lo suficiente, el dolor desaparecerá.',
-                          exit: 'Reconocer que la vergüenza es una emoción, no una verdad sobre quién eres.',
-                          practice: 'Hoy, cuando notes vergüenza, no huyas. Respira y di: "Esto también es parte de ser humano."',
-                          affirmation: 'Tengo derecho a existir, incluso con mis imperfecciones.',
-                          journalQuestion: '¿Qué parte de mí he estado escondiendo por vergüenza?'
-                        },
-                        {
-                          name: 'Culpa', calibration: 30, minimumDays: 14,
-                          teaching: 'En culpa, ya no te escondes pero te castigas. Crees que mereces sufrir por lo que hiciste o dejaste de hacer.',
-                          signs: ['Te disculpas excesivamente', 'Revives errores pasados constantemente', 'Sientes que debes compensar algo'],
-                          trap: 'Pensar que sufrir lo suficiente eventualmente te redimirá.',
-                          exit: 'Entender que el perdón (especialmente el auto-perdón) es posible.',
-                          practice: 'Escribe una carta de perdón a ti mismo por algo que aún te pesa. No tienes que enviarla.',
-                          affirmation: 'Merezco perdón, empezando por el mío propio.',
-                          journalQuestion: '¿Qué error pasado sigo cargando que ya es hora de soltar?'
-                        },
-                        {
-                          name: 'Apatía', calibration: 50, minimumDays: 14,
-                          teaching: 'La apatía es desesperanza cristalizada. Ya no sientes vergüenza ni culpa porque dejaste de intentar.',
-                          signs: ['Nada parece importar', 'Dices "¿para qué?" frecuentemente', 'Descuidas tu cuidado personal'],
-                          trap: 'La comodidad de no intentar nada para no fallar en nada.',
-                          exit: 'Una chispa de deseo, aunque sea pequeña: querer algo.',
-                          practice: 'Haz UNA cosa pequeña hoy, aunque no "sientas" hacerla. Lava un plato. Da una vuelta a la manzana.',
-                          affirmation: 'Cada pequeño paso cuenta, aunque no lo sienta.',
-                          journalQuestion: '¿Qué pequeña cosa me gustaría que fuera diferente?'
-                        },
-                        {
-                          name: 'Pena', calibration: 75, minimumDays: 10,
-                          teaching: 'En pena hay energía de nuevo, pero es energía de pérdida. Sientes, y lo que sientes es tristeza.',
-                          signs: ['Lloras con facilidad o desearías poder llorar', 'Vives en el pasado', 'Sientes un vacío persistente'],
-                          trap: 'Identificarte con tus pérdidas, hacer de la tristeza tu identidad.',
-                          exit: 'Permitir la tristeza sin aferrarte a ella. Dejarla fluir.',
-                          practice: 'Permite 5 minutos de tristeza consciente. Pon un timer si quieres. Después, nota que sigues aquí.',
-                          affirmation: 'Mis pérdidas me han formado, pero no me definen.',
-                          journalQuestion: '¿Qué pérdida necesito honrar y comenzar a soltar?'
-                        },
-                        {
-                          name: 'Miedo', calibration: 100, minimumDays: 10,
-                          teaching: 'El miedo indica que hay algo que valoras lo suficiente como para temer perderlo. Es energía de supervivencia.',
-                          signs: ['Anticipas lo peor constantemente', 'Evitas situaciones por "si acaso"', 'Tu cuerpo está frecuentemente tenso'],
-                          trap: 'Organizar tu vida alrededor de evitar lo que temes.',
-                          exit: 'Descubrir que puedes sentir miedo y actuar de todos modos.',
-                          practice: 'Identifica UN miedo concreto hoy. Pregúntate: "¿Qué haría si no tuviera este miedo?"',
-                          affirmation: 'El miedo es información, no una orden.',
-                          journalQuestion: '¿Qué haría diferente si no tuviera miedo?'
-                        },
-                        {
-                          name: 'Deseo', calibration: 125, minimumDays: 10,
-                          teaching: 'El deseo es la primera energía realmente hacia afuera. Quieres algo. El problema es que crees que eso te completará.',
-                          signs: ['Siempre quieres más de algo', 'La satisfacción dura poco', 'Comparas lo que tienes con lo que otros tienen'],
-                          trap: 'Creer que el próximo logro/compra/relación finalmente te hará feliz.',
-                          exit: 'Distinguir entre deseos del ego y necesidades genuinas.',
-                          practice: 'Nota tres deseos que surjan hoy. Por cada uno pregunta: "¿Qué necesidad más profunda hay debajo?"',
-                          affirmation: 'Mis deseos me señalan algo, pero no me controlan.',
-                          journalQuestion: '¿Qué creo que me falta para estar completo?'
-                        },
-                        {
-                          name: 'Ira', calibration: 150, minimumDays: 10,
-                          teaching: 'La ira es poder. Por primera vez tienes energía para cambiar las cosas. El riesgo es destruir en vez de construir.',
-                          signs: ['Te frustras fácilmente', 'Culpas a otros de tus problemas', 'Sientes que el mundo es injusto contigo'],
-                          trap: 'Quedarte en la queja y el resentimiento sin pasar a la acción constructiva.',
-                          exit: 'Canalizar la energía de la ira hacia cambio real, no hacia destrucción.',
-                          practice: 'Canaliza la energía de cualquier frustración en algo físico: limpia, ordena, camina rápido.',
-                          affirmation: 'Mi ira tiene un mensaje; puedo escucharlo sin ser consumido.',
-                          journalQuestion: '¿Qué me está diciendo mi ira que necesita cambiar?'
-                        },
-                        {
-                          name: 'Orgullo', calibration: 175, minimumDays: 10,
-                          teaching: 'El orgullo se siente bien comparado con los niveles anteriores. Pero depende de circunstancias externas y de compararte con otros.',
-                          signs: ['Necesitas tener razón', 'Te cuesta admitir errores', 'Tu autoestima sube y baja según logros'],
-                          trap: 'Basar tu valor en ser "mejor que" otros.',
-                          exit: 'Desarrollar autoestima basada en quién eres, no en cómo te comparas.',
-                          practice: 'Practica decir "no sé" o "me equivoqué" al menos una vez hoy, genuinamente.',
-                          affirmation: 'No necesito tener razón para tener valor.',
-                          journalQuestion: '¿En qué área necesito soltar la necesidad de tener razón?'
-                        },
-                        {
-                          name: 'Coraje', calibration: 200, minimumDays: 7,
-                          teaching: '¡Felicidades! Cruzaste la línea del 200. Aquí la vida deja de ser algo que te pasa y empieza a ser algo que creas.',
-                          signs: ['Tomas responsabilidad de tu vida', 'Ves problemas como desafíos', 'Actúas a pesar del miedo'],
-                          trap: 'Forzar resultados, creer que todo depende solo de tu esfuerzo.',
-                          exit: 'Combinar acción con aceptación de lo que no controlas.',
-                          practice: 'Haz algo que te dé un poco de miedo pero que sabes que es correcto. Empieza pequeño.',
-                          affirmation: 'Tengo el poder de cambiar mi vida, un paso a la vez.',
-                          journalQuestion: '¿Qué acción he estado postergando por miedo?'
-                        },
-                        {
-                          name: 'Neutralidad', calibration: 250, minimumDays: 7,
-                          teaching: 'En neutralidad descubres que puedes estar bien independientemente de las circunstancias. Dejas de necesitar que las cosas sean de cierta manera.',
-                          signs: ['Los problemas te afectan menos', 'Eres flexible ante cambios', 'No necesitas controlar todo'],
-                          trap: 'Confundir desapego con indiferencia.',
-                          exit: 'Mantener preferencias sin convertirlas en exigencias.',
-                          practice: 'Ante cada situación hoy, pausa y pregunta: "¿Puedo estar bien sin importar cómo resulte esto?"',
-                          affirmation: 'Estoy bien independientemente de las circunstancias.',
-                          journalQuestion: '¿A qué resultado estoy demasiado apegado?'
-                        },
-                        {
-                          name: 'Voluntad', calibration: 310, minimumDays: 7,
-                          teaching: 'La voluntad es decir SÍ a la vida. No es fuerza de voluntad (eso es coraje), es disponibilidad genuina.',
-                          signs: ['Estás abierto a aprender', 'Dices sí más que no', 'La vida fluye más fácilmente'],
-                          trap: 'Decir sí a todo sin discernimiento.',
-                          exit: 'Desarrollar criterio sobre dónde poner tu energía.',
-                          practice: 'Di "sí" genuinamente a algo que normalmente resistirías. Observa qué cambia.',
-                          affirmation: 'La vida me apoya cuando yo apoyo a la vida.',
-                          journalQuestion: '¿A qué he estado diciendo "no" que podría intentar?'
-                        },
-                        {
-                          name: 'Aceptación', calibration: 350, minimumDays: 7,
-                          teaching: 'Aceptación no es resignación. Es trabajar con la realidad tal como es, no como desearías que fuera.',
-                          signs: ['No luchas contra lo que es', 'Ves la perfección en la imperfección', 'Perdonas con más facilidad'],
-                          trap: 'Usar aceptación como excusa para no actuar.',
-                          exit: 'Aceptar Y actuar: trabajar desde donde estás hacia donde quieres ir.',
-                          practice: 'Elige una situación difícil y di internamente: "Esto es lo que es. ¿Qué puedo hacer desde aquí?"',
-                          affirmation: 'Acepto la realidad tal como es y trabajo desde ahí.',
-                          journalQuestion: '¿Qué situación estoy resistiendo que necesito aceptar primero?'
-                        },
-                        {
-                          name: 'Razón', calibration: 400, minimumDays: 7,
-                          teaching: 'La razón es el pico del intelecto. Aquí puedes entender sistemas complejos y ver patrones que otros no ven.',
-                          signs: ['Analizas las cosas profundamente', 'Valoras datos y lógica', 'Puedes ver múltiples perspectivas'],
-                          trap: 'Creer que todo puede entenderse con la mente. Parálisis por análisis.',
-                          exit: 'Reconocer los límites del intelecto. Abrirse a otras formas de conocer.',
-                          practice: 'Ante un problema, separa hechos de interpretaciones. Lista ambos en columnas separadas.',
-                          affirmation: 'Mi mente es una herramienta poderosa al servicio de algo mayor.',
-                          journalQuestion: '¿Dónde estoy sobre-analizando en vez de actuar o sentir?'
-                        },
-                        {
-                          name: 'Amor', calibration: 500, minimumDays: 7,
-                          teaching: 'Amor incondicional. No es una emoción, es una forma de ver. Ves la esencia detrás de las formas.',
-                          signs: ['Sientes conexión con extraños', 'Ves lo mejor en las personas', 'El perdón es natural'],
-                          trap: 'Negar el mal o el sufrimiento por querer ver solo amor.',
-                          exit: 'Integrar amor con discernimiento. Amar no significa permitir todo.',
-                          practice: 'Envía genuinamente buenos deseos a alguien difícil. No por ellos, sino por lo que hace en ti.',
-                          affirmation: 'El amor no es algo que busco; es lo que soy cuando dejo de buscar.',
-                          journalQuestion: '¿A quién me cuesta amar y qué me enseña eso de mí?'
-                        },
-                        {
-                          name: 'Alegría', calibration: 540, minimumDays: 7,
-                          teaching: 'La alegría no depende de nada externo. Es el estado natural cuando dejas de interferir.',
-                          signs: ['Sonríes sin razón aparente', 'Todo parece más vivo y brillante', 'La gratitud es constante'],
-                          trap: 'Apegarte a la alegría y temerle a perderla.',
-                          exit: 'Dejar que la alegría venga y vaya sin aferrarte.',
-                          practice: 'Busca la perfección oculta en algo "ordinario" hoy: una taza de café, la luz en una ventana.',
-                          affirmation: 'La alegría está disponible ahora, sin condiciones.',
-                          journalQuestion: '¿Dónde estoy buscando alegría fuera cuando ya está aquí?'
-                        },
-                        {
-                          name: 'Paz', calibration: 600, minimumDays: 7,
-                          teaching: 'La paz trasciende la alegría. No hay nada que lograr, nada que probar. Todo simplemente es.',
-                          signs: ['Silencio mental profundo', 'Sensación de completitud', 'El tiempo parece diferente'],
-                          trap: 'Quedarse en la paz sin compartirla.',
-                          exit: 'Permitir que la paz se exprese a través de ti hacia el mundo.',
-                          practice: 'Dedica 10 minutos a no hacer nada. No meditar, no respirar conscientemente. Solo ser.',
-                          affirmation: 'La paz no es algo que logro; es lo que queda cuando dejo de luchar.',
-                          journalQuestion: '¿Qué pasaría si dejara de esforzarme por un momento?'
-                        },
-                        {
-                          name: 'Iluminación', calibration: '700+', minimumDays: 7,
-                          teaching: 'La consciencia pura. No hay separación entre tú y el todo. Extremadamente raro de forma permanente.',
-                          signs: ['No hay "yo" separado', 'Todo es percibido como uno', 'Presencia radiante natural'],
-                          trap: 'No hay trampa aquí. Pero tampoco hay nadie para quedar atrapado.',
-                          exit: 'No hay salida porque no hay lugar adonde ir.',
-                          practice: 'Vive este día como si cada momento fuera exactamente como debe ser. Porque lo es.',
-                          affirmation: 'Todo es uno. No hay nada que buscar.',
-                          journalQuestion: '¿Quién soy cuando dejo de definirme?'
-                        }
-                      ];
-
-                      const currentLevelData = hawkinsLevels[effectiveLevel] || hawkinsLevels[0];
-
-                      // Calculate days in level
-                      const practicesInLevel = (cons.practices || []).filter(p =>
-                        p.pathId === pathId && p.levelName === currentLevelData.name
-                      );
-                      const daysWithPractice = new Set(practicesInLevel.map(p => p.date)).size;
-                      const minDays = currentLevelData.minimumDays || 7;
-
-                      // XP calculation
-                      const currentXP = cons.currentXP || 0;
-                      const xpForNextLevel = 100 * (currentLevel + 1);
-
-                      // Log practice function
-                      const logConsPractice = () => {
-                        setData(prev => ({
-                          ...prev,
-                          consciousness: {
-                            ...prev.consciousness,
-                            practices: [
-                              ...(prev.consciousness?.practices || []),
-                              {
-                                id: Date.now(),
-                                date: viewDate,
-                                pathId: pathId,
-                                levelName: currentLevelData.name,
-                                practice: currentLevelData.practice,
-                                notes: consPracticeNotes,
-                                xp: 25,
-                                timestamp: new Date().toISOString()
-                              }
-                            ],
-                            totalXP: (prev.consciousness?.totalXP || 0) + 25,
-                            currentXP: (prev.consciousness?.currentXP || 0) + 25
-                          }
-                        }));
-                        setConsPracticeNotes('');
-                        setConsExpandedCard(null);
-                        showToast('⚡ +25 XP - Práctica completada');
-                      };
-
-                      return (
-                        <Card
-                          className={`py-2 border-violet-500/30 bg-gradient-to-r from-violet-500/10 to-fuchsia-500/10 transition-all ${consExpandedCard === 'practice' ? 'border-violet-500/50' : ''}`}
+                      {/* Quick link to start path if none active */}
+                      {!activePath && (
+                        <button
+                          onClick={() => setScreen('consciousness')}
+                          className="w-full py-2 bg-violet-500/20 border border-violet-500/30 rounded-lg text-sm text-violet-400"
                         >
-                          <div
-                            className="flex items-center justify-between cursor-pointer"
-                            onClick={() => setConsExpandedCard(consExpandedCard === 'practice' ? null : 'practice')}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center">
-                                <span className="text-lg">{activePath.icon}</span>
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium">{currentLevelData.name}</p>
-                                <p className="text-[10px] text-white/40">
-                                  Nivel {effectiveLevel + 1} • Cal. {currentLevelData.calibration}
-                                  {practiceToday && <span className="text-emerald-400 ml-2">✓ Hecho</span>}
-                                </p>
-                              </div>
-                            </div>
-                            {practiceToday ? (
-                              <Check className="w-5 h-5 text-violet-400" />
-                            ) : (
-                              <ChevronDown className={`w-5 h-5 text-white/30 transition-transform ${consExpandedCard === 'practice' ? 'rotate-180' : ''}`} />
-                            )}
-                          </div>
-
-                          {/* Expanded: Full level content */}
-                          {consExpandedCard === 'practice' && (
-                            <div className="mt-3 pt-3 border-t border-white/10 space-y-3">
-
-                              {/* Progress stats */}
-                              <div className="flex items-center gap-3">
-                                <div className="flex-1 bg-white/5 rounded-lg p-2 text-center">
-                                  <p className="text-lg font-bold">{daysWithPractice}</p>
-                                  <p className="text-[10px] text-white/40">días practicando</p>
-                                </div>
-                                <div className="flex-1 bg-white/5 rounded-lg p-2 text-center">
-                                  <p className="text-lg font-bold">{minDays}</p>
-                                  <p className="text-[10px] text-white/40">mínimo</p>
-                                </div>
-                                <div className="flex-1 bg-white/5 rounded-lg p-2 text-center">
-                                  <p className="text-lg font-bold">{currentXP}</p>
-                                  <p className="text-[10px] text-white/40">XP</p>
-                                </div>
-                              </div>
-
-                              {/* XP Progress bar */}
-                              <div>
-                                <div className="flex justify-between text-[10px] text-white/40 mb-1">
-                                  <span>Progreso XP</span>
-                                  <span>{currentXP}/{xpForNextLevel}</span>
-                                </div>
-                                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all"
-                                    style={{ width: `${Math.min(100, (currentXP / xpForNextLevel) * 100)}%` }}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Teaching */}
-                              <div className="bg-white/5 rounded-lg p-3">
-                                <p className="text-xs text-violet-400 mb-1">📖 Enseñanza</p>
-                                <p className="text-xs text-white/70 leading-relaxed">{currentLevelData.teaching}</p>
-                              </div>
-
-                              {/* Signs */}
-                              <div className="bg-amber-500/10 rounded-lg p-3">
-                                <p className="text-xs text-amber-400 mb-2">⚡ Señales de este nivel</p>
-                                <div className="space-y-1">
-                                  {currentLevelData.signs.map((sign, i) => (
-                                    <p key={i} className="text-xs text-white/60 flex items-start gap-2">
-                                      <span className="text-amber-400">•</span> {sign}
-                                    </p>
-                                  ))}
-                                </div>
-                              </div>
-
-                              {/* Trap & Exit */}
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-red-500/10 rounded-lg p-2">
-                                  <p className="text-[10px] text-red-400 mb-1">🚫 Trampa</p>
-                                  <p className="text-[10px] text-white/60">{currentLevelData.trap}</p>
-                                </div>
-                                <div className="bg-emerald-500/10 rounded-lg p-2">
-                                  <p className="text-[10px] text-emerald-400 mb-1">🚪 Salida</p>
-                                  <p className="text-[10px] text-white/60">{currentLevelData.exit}</p>
-                                </div>
-                              </div>
-
-                              {/* Journal Question */}
-                              <div className="bg-cyan-500/10 rounded-lg p-3">
-                                <p className="text-xs text-cyan-400 mb-1">💭 Pregunta de reflexión</p>
-                                <p className="text-sm italic text-white/70">"{currentLevelData.journalQuestion}"</p>
-                              </div>
-
-                              {/* Practice section */}
-                              {practiceToday ? (
-                                <div className="bg-emerald-500/10 rounded-lg p-3">
-                                  <p className="text-xs text-emerald-400 mb-1">✓ Práctica completada hoy</p>
-                                  <p className="text-xs text-white/60">{practiceToday.practice}</p>
-                                  {practiceToday.notes && (
-                                    <p className="text-xs text-white/40 mt-2 italic">"{practiceToday.notes}"</p>
-                                  )}
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="bg-violet-500/10 rounded-lg p-3">
-                                    <p className="text-xs text-violet-400 mb-1">🎯 Práctica del día</p>
-                                    <p className="text-sm text-white/80">{currentLevelData.practice}</p>
-                                  </div>
-
-                                  <div className="bg-white/5 rounded-lg p-2">
-                                    <p className="text-xs italic text-white/50">"{currentLevelData.affirmation}"</p>
-                                  </div>
-
-                                  <textarea
-                                    value={consPracticeNotes}
-                                    onChange={(e) => setConsPracticeNotes(e.target.value)}
-                                    placeholder="Notas sobre tu práctica (opcional)..."
-                                    rows={2}
-                                    className="w-full bg-white/5 rounded-lg p-2 text-sm resize-none"
-                                  />
-
-                                  <button
-                                    onClick={logConsPractice}
-                                    className="w-full py-2.5 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-lg text-sm font-medium"
-                                  >
-                                    Completar práctica (+25 XP)
-                                  </button>
-                                </>
-                              )}
-
-                              {/* Link to full screen */}
-                              <button
-                                onClick={() => setScreen('consciousness')}
-                                className="w-full py-1.5 text-xs text-violet-400 hover:text-violet-300"
-                              >
-                                Ver camino completo →
-                              </button>
-                            </div>
-                          )}
-                        </Card>
-                      );
-                    })()}
-
-                    {/* Quick link to start path if none active */}
-                    {!activePath && (
-                      <button
-                        onClick={() => setScreen('consciousness')}
-                        className="w-full py-2 bg-violet-500/20 border border-violet-500/30 rounded-lg text-sm text-violet-400"
-                      >
-                        + Comenzar un camino de consciencia
-                      </button>
-                    )}
-                  </div>
-                </AccordionSection>
-              </AnimatedMount>
-            );
-          })()}
+                          + Comenzar un camino de consciencia
+                        </button>
+                      )}
+                    </div>
+                  </AccordionSection>
+                </AnimatedMount>
+              );
+            })()
+          }
 
           {/* Year Overview - 365 days calendar - at the end for reflection */}
           <AnimatedMount delay={195}>
@@ -6837,14 +7070,16 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
       )}
 
       {/* Quick Add FAB */}
-      {isViewingToday && viewMode === 'day' && (
-        <button
-          onClick={() => setShowQuickAdd(true)}
-          className="fixed bottom-28 right-6 w-14 h-14 bg-violet-500 rounded-full flex items-center justify-center shadow-lg shadow-violet-500/30 hover:bg-violet-600 transition-colors z-40"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
-      )}
+      {
+        isViewingToday && viewMode === 'day' && (
+          <button
+            onClick={() => setShowQuickAdd(true)}
+            className="fixed bottom-28 right-6 w-14 h-14 bg-violet-500 rounded-full flex items-center justify-center shadow-lg shadow-violet-500/30 hover:bg-violet-600 transition-colors z-40"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        )
+      }
 
       {/* Modals */}
       <Modal isOpen={showSleep} onClose={() => setShowSleep(false)} title="Registrar sueño">
@@ -7434,7 +7669,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
           </div>
         )}
       </Modal>
-    </div>
+    </div >
   );
 };
 
