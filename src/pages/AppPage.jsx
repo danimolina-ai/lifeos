@@ -3604,24 +3604,29 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                           };
                                           setData(prev => ({ ...prev, workouts: [...(prev.workouts || []), newWorkout] }));
                                           setShowTemplateModal(false);
-                                          showToast(`${r.name} iniciado 💪`);
+                                          // Navigate to workout area for full tracking experience
+                                          setScreen('workout');
+                                          showToast(`${r.name} iniciado - ¡A entrenar! 💪`);
                                         }}
                                         className="w-full p-3 bg-white/10 hover:bg-violet-500/30 rounded-xl text-left flex items-center gap-3"
                                       >
                                         <Dumbbell className="w-5 h-5 text-violet-400" />
-                                        <div>
+                                        <div className="flex-1">
                                           <p className="font-medium">{r.name}</p>
                                           <p className="text-xs text-white/50">{r.exercises?.length || 0} ejercicios</p>
                                         </div>
+                                        <ArrowRight className="w-4 h-4 text-white/30" />
                                       </button>
                                     ))}
                                   </div>
-                                  <button
-                                    onClick={() => { setShowTemplateModal(false); setScreen('workout'); }}
-                                    className="w-full mt-4 py-3 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold"
-                                  >
-                                    Crear nueva plantilla
-                                  </button>
+                                  <div className="border-t border-white/10 mt-4 pt-4 space-y-2">
+                                    <button
+                                      onClick={() => { setShowTemplateModal(false); setScreen('workout'); }}
+                                      className="w-full py-3 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold flex items-center justify-center gap-2"
+                                    >
+                                      <Plus className="w-5 h-5" /> Crear nueva plantilla
+                                    </button>
+                                  </div>
                                 </div>
                               </div>,
                               document.body
