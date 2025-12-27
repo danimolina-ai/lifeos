@@ -200,23 +200,45 @@ let pendingSaveData = null // Track pending data for immediate save on page hide
 const saveToSupabase = async (key, value, immediate = false) => {
     if (key !== 'lifeOS_v58') return
 
-    // Get fresh session - don't rely on cached currentUser
+    // Get fresh session - try multiple methods
     let userId = currentUser?.id
+
+    // Method 1: Try supabase.auth.getSession()
     if (!userId) {
         try {
             const { data: { session } } = await supabase.auth.getSession()
             userId = session?.user?.id
             if (session?.user) {
-                currentUser = session.user // Update cached user
-                console.log('[Storage] 🔄 Got fresh session for user:', userId)
+                currentUser = session.user
+                console.log('[Storage] 🔄 Got session via getSession:', userId)
             }
         } catch (e) {
-            console.error('[Storage] Failed to get session:', e)
+            console.error('[Storage] getSession failed:', e)
+        }
+    }
+
+    // Method 2: Try reading from Supabase's localStorage cache
+    if (!userId) {
+        try {
+            // Supabase stores auth in localStorage with a key like sb-{project-ref}-auth-token
+            const projectRef = import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0]
+            const authKey = `sb-${projectRef}-auth-token`
+            const cachedAuth = localStorage.getItem(authKey)
+            if (cachedAuth) {
+                const parsed = JSON.parse(cachedAuth)
+                userId = parsed?.user?.id
+                if (userId) {
+                    currentUser = parsed.user
+                    console.log('[Storage] 🔄 Got user from localStorage cache:', userId)
+                }
+            }
+        } catch (e) {
+            console.error('[Storage] localStorage cache read failed:', e)
         }
     }
 
     if (!userId) {
-        console.log('[Storage] ⚠️ No user session, skipping save')
+        console.log('[Storage] ⚠️ No user found via any method, skipping save')
         return
     }
 
