@@ -2170,13 +2170,13 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
     }
 
     // 3.2 HABITS → Score/Momentum
-    if (habitLogs.length > 0 && data.habits.length > 0) {
+    if (dayHabitLogs.length > 0 && data.habits.length > 0) {
       const last7Completion = last14Days.slice(0, 7).map(d => {
-        const dayLogs = data.habitLogs.filter(l => l.date === d && l.completed);
+        const dayLogs = data.habitLogs?.filter(l => l.date === d && l.completed) || [];
         return data.habits.length > 0 ? dayLogs.length / data.habits.length : 0;
       });
       const weeklyAvg = last7Completion.reduce((a, b) => a + b, 0) / 7;
-      const todayRate = habitLogs.filter(h => h.completed).length / data.habits.length;
+      const todayRate = dayHabitLogs.filter(h => h.completed).length / data.habits.length;
 
       if (weeklyAvg >= 0.8) {
         correlations.push({
@@ -2293,7 +2293,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
     }
 
     return correlations;
-  }, [data, dayData, dayMeals, habitLogs, viewDate]);
+  }, [data, dayData, dayMeals, dayHabitLogs, viewDate]);
 
   // Legacy getInsight for compatibility (now uses correlations)
   const getInsight = () => {
@@ -4805,8 +4805,8 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                     <div
                       key={corr.id}
                       className={`flex items-start gap-3 p-2 rounded-lg ${corr.type === 'success' ? 'bg-emerald-500/10' :
-                          corr.type === 'warning' ? 'bg-amber-500/10' :
-                            'bg-blue-500/10'
+                        corr.type === 'warning' ? 'bg-amber-500/10' :
+                          'bg-blue-500/10'
                         }`}
                     >
                       <span className="text-lg flex-shrink-0">{corr.icon}</span>
