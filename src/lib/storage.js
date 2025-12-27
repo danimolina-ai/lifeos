@@ -63,7 +63,7 @@ const loadFromSupabase = async () => {
     }
 
     try {
-        console.log('[Storage] Loading from Supabase...')
+        console.log('[Storage] Loading from Supabase for user:', currentUser.id)
         updateSyncStatus('syncing')
 
         const { data, error } = await supabase
@@ -80,16 +80,21 @@ const loadFromSupabase = async () => {
             return
         }
 
+        // Get local data for comparison
+        const localData = localStorage.getItem('lifeOS_v58')
+        const localUpdatedAt = parseInt(localStorage.getItem('lifeOS_lastSync') || '0')
+
+        console.log('[Storage] Local lastSync:', localUpdatedAt ? new Date(localUpdatedAt).toISOString() : 'never')
+
         if (data && data.data) {
             const supabaseUpdatedAt = new Date(data.updated_at).getTime()
-            const localUpdatedAt = parseInt(localStorage.getItem('lifeOS_lastSync') || '0')
+            console.log('[Storage] Supabase updated_at:', new Date(supabaseUpdatedAt).toISOString())
+            console.log('[Storage] Comparison: Supabase=' + supabaseUpdatedAt + ' vs Local=' + localUpdatedAt)
 
-            console.log('[Storage] Supabase updated:', new Date(supabaseUpdatedAt).toISOString())
-            console.log('[Storage] Local lastSync:', new Date(localUpdatedAt).toISOString())
-
-            // Always use Supabase data if it's newer than our last sync
+            // Use Supabase data if it's newer than our last successful sync
+            // This ensures changes from other devices always come through
             if (supabaseUpdatedAt > localUpdatedAt) {
-                console.log('[Storage] Supabase has newer data, syncing...')
+                console.log('[Storage] ✅ Supabase has NEWER data, downloading...')
                 const newData = JSON.stringify(data.data)
 
                 // Use original setItem to avoid triggering save loop
@@ -98,23 +103,36 @@ const loadFromSupabase = async () => {
                 originalSetItem('lifeOS_lastSync', supabaseUpdatedAt.toString())
 
                 updateSyncStatus('synced')
-                setTimeout(() => updateSyncStatus('idle'), 2000)
+                console.log('[Storage] ✅ Data synced from cloud, reloading UI...')
 
-                // Reload to refresh UI
-                window.location.reload()
+                // Small delay to ensure localStorage is written
+                setTimeout(() => {
+                    window.location.reload()
+                }, 100)
                 return
             } else {
-                console.log('[Storage] Local data is current or newer')
+                console.log('[Storage] Local data is current (same or newer timestamp)')
+
+                // If we have local data but Supabase doesn't have it or is older,
+                // we should push our local data to Supabase
+                if (localData && localUpdatedAt > supabaseUpdatedAt) {
+                    console.log('[Storage] Local is newer, will sync to cloud on next change')
+                }
             }
         } else {
-            console.log('[Storage] No data in Supabase yet')
+            console.log('[Storage] No data in Supabase yet for this user')
+
+            // If we have local data but nothing in cloud, push it
+            if (localData) {
+                console.log('[Storage] Pushing local data to cloud...')
+                saveToSupabase('lifeOS_v58', localData)
+            }
         }
 
         updateSyncStatus('synced')
         setTimeout(() => updateSyncStatus('idle'), 2000)
 
     } catch (err) {
-
         console.error('[Storage] Load error:', err)
         updateSyncStatus('error')
         setTimeout(() => updateSyncStatus('idle'), 3000)
