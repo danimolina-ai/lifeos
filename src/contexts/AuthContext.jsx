@@ -17,20 +17,37 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        // Timeout fallback - prevent infinite loading on mobile
+        const loadingTimeout = setTimeout(() => {
+            if (loading) {
+                console.warn('Auth loading timeout - continuing without auth check');
+                setLoading(false);
+            }
+        }, 5000); // 5 second timeout
+
         // Check active session
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setUser(session?.user ?? null)
-            setLoading(false)
-        })
+            setUser(session?.user ?? null);
+            setLoading(false);
+            clearTimeout(loadingTimeout);
+        }).catch((error) => {
+            console.error('Auth getSession error:', error);
+            setLoading(false);
+            clearTimeout(loadingTimeout);
+        });
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user ?? null)
-            setLoading(false)
-        })
+            setUser(session?.user ?? null);
+            setLoading(false);
+        });
 
-        return () => subscription.unsubscribe()
-    }, [])
+        return () => {
+            subscription.unsubscribe();
+            clearTimeout(loadingTimeout);
+        };
+    }, []);
+
 
     const signUp = async (email, password, name) => {
         const { data, error } = await supabase.auth.signUp({
