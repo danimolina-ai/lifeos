@@ -22488,6 +22488,7 @@ export default function LifeOSApp() {
   const [data, setData] = useLocalStorage('lifeOS_v58', EMPTY_DATA);
   const [screen, setScreen] = useState('today');
   const [toast, setToast] = useState(null);
+  const [hubOpen, setHubOpen] = useState(false); // Hub menu state - must be before any conditional returns
 
   // Listen for goToSettings event from global header
   useEffect(() => {
@@ -22632,8 +22633,6 @@ export default function LifeOSApp() {
   // Calculate badge for personal tasks
   const personalTasksDue = (data.personalTasks || []).filter(t => !t.completed && t.dueDate && t.dueDate <= today).length;
 
-  // Hub menu state
-  const [hubOpen, setHubOpen] = useState(false);
 
   // Active areas from user settings
   const activeAreas = data.user.activeAreas || ['nutrition', 'workout', 'habits', 'work', 'personal', 'body', 'finances', 'consciousness', 'relationships'];
