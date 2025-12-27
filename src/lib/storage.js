@@ -195,53 +195,130 @@ const loadFromSupabase = async () => {
 
 // Save to Supabase (debounced to avoid too many writes)
 let saveTimeout = null
-const saveToSupabase = async (key, value) => {
+let pendingSaveData = null // Track pending data for immediate save on page hide
+
+const saveToSupabase = async (key, value, immediate = false) => {
     if (!currentUser) {
         console.log('[Storage] No user, skipping save')
         return
     }
     if (key !== 'lifeOS_v58') return
 
+    // Store pending data for emergency save
+    pendingSaveData = { key, value }
+
     // Clear previous timeout
     if (saveTimeout) clearTimeout(saveTimeout)
 
     updateSyncStatus('syncing')
 
-    // Debounce: wait 2 seconds before saving
+    // If immediate save requested (e.g., page hiding), save now
+    if (immediate) {
+        await doSave(key, value)
+        return
+    }
+
+    // Debounce: wait 500ms before saving (reduced from 2s for mobile)
     saveTimeout = setTimeout(async () => {
-        try {
-            console.log('[Storage] Saving to Supabase...')
-            const parsedValue = JSON.parse(value)
+        await doSave(key, value)
+        pendingSaveData = null
+    }, 500)
+}
 
-            const { error } = await supabase
-                .from('user_data')
-                .upsert({
-                    user_id: currentUser.id,
-                    key: key,
-                    data: parsedValue,
-                    updated_at: new Date().toISOString()
-                }, {
-                    onConflict: 'user_id,key'
-                })
+// Actual save function
+const doSave = async (key, value) => {
+    try {
+        console.log('[Storage] 📤 Saving to Supabase...')
+        const parsedValue = JSON.parse(value)
 
-            if (error) {
-                console.error('[Storage] Save error:', error)
-                updateSyncStatus('error')
-                setTimeout(() => updateSyncStatus('idle'), 3000)
-            } else {
-                console.log('[Storage] Saved successfully')
-                // Update lastSync timestamp so we don't download our own changes
-                const originalSetItem = Object.getPrototypeOf(localStorage).setItem.bind(localStorage)
-                originalSetItem('lifeOS_lastSync', Date.now().toString())
-                updateSyncStatus('synced')
-                setTimeout(() => updateSyncStatus('idle'), 2000)
-            }
-        } catch (err) {
-            console.error('[Storage] Save error:', err)
+        const { error } = await supabase
+            .from('user_data')
+            .upsert({
+                user_id: currentUser.id,
+                key: key,
+                data: parsedValue,
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: 'user_id,key'
+            })
+
+        if (error) {
+            console.error('[Storage] ❌ Save error:', error)
             updateSyncStatus('error')
             setTimeout(() => updateSyncStatus('idle'), 3000)
+        } else {
+            console.log('[Storage] ✅ Saved successfully to Supabase')
+            // Update lastSync timestamp so we don't download our own changes
+            const originalSetItem = Object.getPrototypeOf(localStorage).setItem.bind(localStorage)
+            originalSetItem('lifeOS_lastSync', Date.now().toString())
+            updateSyncStatus('synced')
+            setTimeout(() => updateSyncStatus('idle'), 2000)
         }
-    }, 2000)
+    } catch (err) {
+        console.error('[Storage] ❌ Save error:', err)
+        updateSyncStatus('error')
+        setTimeout(() => updateSyncStatus('idle'), 3000)
+    }
+}
+
+// CRITICAL: Save immediately when page is about to be hidden (mobile browser switching, closing tab, etc.)
+if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && pendingSaveData) {
+            console.log('[Storage] 📱 Page hiding, saving immediately...')
+            // Use sendBeacon or synchronous approach for page unload
+            if (navigator.sendBeacon && currentUser) {
+                const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id,key`
+                const data = JSON.stringify({
+                    user_id: currentUser.id,
+                    key: pendingSaveData.key,
+                    data: JSON.parse(pendingSaveData.value),
+                    updated_at: new Date().toISOString()
+                })
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                    'Prefer': 'resolution=merge-duplicates'
+                }
+                // sendBeacon doesn't support custom headers, so we use fetch with keepalive
+                fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: data,
+                    keepalive: true
+                }).catch(e => console.error('[Storage] Beacon save error:', e))
+            } else {
+                // Fallback: try immediate save
+                doSave(pendingSaveData.key, pendingSaveData.value)
+            }
+            pendingSaveData = null
+        }
+    })
+
+    // Also handle beforeunload for desktop
+    window.addEventListener('beforeunload', () => {
+        if (pendingSaveData && currentUser) {
+            console.log('[Storage] 📤 Page unloading, saving...')
+            // Synchronous XHR as last resort (deprecated but works for unload)
+            const xhr = new XMLHttpRequest()
+            xhr.open('POST', `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id,key`, false)
+            xhr.setRequestHeader('Content-Type', 'application/json')
+            xhr.setRequestHeader('apikey', import.meta.env.VITE_SUPABASE_ANON_KEY)
+            xhr.setRequestHeader('Authorization', `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`)
+            xhr.setRequestHeader('Prefer', 'resolution=merge-duplicates')
+            try {
+                xhr.send(JSON.stringify({
+                    user_id: currentUser.id,
+                    key: pendingSaveData.key,
+                    data: JSON.parse(pendingSaveData.value),
+                    updated_at: new Date().toISOString()
+                }))
+            } catch (e) {
+                console.error('[Storage] Unload save error:', e)
+            }
+        }
+    })
 }
 
 // Store original setItem before intercepting
