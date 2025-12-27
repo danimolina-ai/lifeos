@@ -5,11 +5,10 @@ import { supabase } from './supabase'
 let currentUser = null
 let isInitialized = false
 
-// TIER 2: Sync status tracking
+// Sync status tracking
 let syncStatus = 'idle' // idle, syncing, synced, error
 const updateSyncStatus = (status) => {
     syncStatus = status
-    // Dispatch custom event for UI to listen
     window.dispatchEvent(new CustomEvent('syncStatusChange', { detail: status }))
 }
 
@@ -19,68 +18,105 @@ const getSyncStatus = () => syncStatus
 // Initialize: get current user and set up listener
 const init = async () => {
     if (isInitialized) return
+    isInitialized = true // Set early to prevent double init
 
     try {
+        console.log('[Storage] Initializing...')
+
         // Get current session
-        const { data: { session } } = await supabase.auth.getSession()
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+        if (sessionError) {
+            console.error('[Storage] Session error:', sessionError)
+            return
+        }
+
         currentUser = session?.user || null
+        console.log('[Storage] Current user:', currentUser?.id || 'none')
 
         if (currentUser) {
-            // Load data from Supabase and merge with localStorage
             await loadFromSupabase()
         }
 
         // Listen for auth changes
         supabase.auth.onAuthStateChange(async (event, session) => {
+            const previousUser = currentUser
             currentUser = session?.user || null
+            console.log('[Storage] Auth change:', event, currentUser?.id || 'none')
 
-            if (event === 'SIGNED_IN' && currentUser) {
+            if (event === 'SIGNED_IN' && currentUser && !previousUser) {
                 await loadFromSupabase()
             }
         })
 
-        isInitialized = true
     } catch (err) {
         console.error('[Storage] Init error:', err)
+        updateSyncStatus('idle')
     }
 }
 
 // Load user data from Supabase
 const loadFromSupabase = async () => {
-    if (!currentUser) return
+    if (!currentUser) {
+        console.log('[Storage] No user, skipping load')
+        return
+    }
 
     try {
+        console.log('[Storage] Loading from Supabase...')
         updateSyncStatus('syncing')
+
         const { data, error } = await supabase
             .from('user_data')
             .select('data')
             .eq('user_id', currentUser.id)
             .eq('key', 'lifeOS_v58')
-            .single()
+            .maybeSingle() // Use maybeSingle instead of single to avoid error when no data
 
-        if (data && !error) {
-            // Save to localStorage (this won't trigger infinite loop because we check)
+        if (error) {
+            console.error('[Storage] Load error:', error)
+            updateSyncStatus('error')
+            setTimeout(() => updateSyncStatus('idle'), 3000)
+            return
+        }
+
+        if (data && data.data) {
+            console.log('[Storage] Found data in Supabase')
             const currentData = localStorage.getItem('lifeOS_v58')
             const newData = JSON.stringify(data.data)
 
             if (currentData !== newData) {
-                localStorage.setItem('lifeOS_v58', newData)
-                // Reload page to sync UI with new data
+                console.log('[Storage] Syncing from Supabase to localStorage')
+                // Use original setItem to avoid triggering save loop
+                const originalSetItem = Object.getPrototypeOf(localStorage).setItem.bind(localStorage)
+                originalSetItem('lifeOS_v58', newData)
+                updateSyncStatus('synced')
+                // Reload to refresh UI
                 window.location.reload()
+                return
             }
+        } else {
+            console.log('[Storage] No data in Supabase yet')
         }
+
         updateSyncStatus('synced')
+        setTimeout(() => updateSyncStatus('idle'), 2000)
+
     } catch (err) {
-        // No data yet, that's ok
-        console.log('[Storage] No existing data in Supabase')
-        updateSyncStatus('idle')
+        console.error('[Storage] Load error:', err)
+        updateSyncStatus('error')
+        setTimeout(() => updateSyncStatus('idle'), 3000)
     }
 }
 
 // Save to Supabase (debounced to avoid too many writes)
 let saveTimeout = null
 const saveToSupabase = async (key, value) => {
-    if (!currentUser || key !== 'lifeOS_v58') return
+    if (!currentUser) {
+        console.log('[Storage] No user, skipping save')
+        return
+    }
+    if (key !== 'lifeOS_v58') return
 
     // Clear previous timeout
     if (saveTimeout) clearTimeout(saveTimeout)
@@ -90,6 +126,7 @@ const saveToSupabase = async (key, value) => {
     // Debounce: wait 2 seconds before saving
     saveTimeout = setTimeout(async () => {
         try {
+            console.log('[Storage] Saving to Supabase...')
             const parsedValue = JSON.parse(value)
 
             const { error } = await supabase
@@ -106,19 +143,24 @@ const saveToSupabase = async (key, value) => {
             if (error) {
                 console.error('[Storage] Save error:', error)
                 updateSyncStatus('error')
+                setTimeout(() => updateSyncStatus('idle'), 3000)
             } else {
-                console.log('[Storage] Saved to Supabase')
+                console.log('[Storage] Saved successfully')
                 updateSyncStatus('synced')
+                setTimeout(() => updateSyncStatus('idle'), 2000)
             }
         } catch (err) {
             console.error('[Storage] Save error:', err)
             updateSyncStatus('error')
+            setTimeout(() => updateSyncStatus('idle'), 3000)
         }
     }, 2000)
 }
 
-// Intercept localStorage.setItem
+// Store original setItem before intercepting
 const originalSetItem = localStorage.setItem.bind(localStorage)
+
+// Intercept localStorage.setItem
 localStorage.setItem = function (key, value) {
     // Call original
     originalSetItem(key, value)
@@ -133,4 +175,3 @@ localStorage.setItem = function (key, value) {
 init()
 
 export { currentUser, init, getSyncStatus }
-
