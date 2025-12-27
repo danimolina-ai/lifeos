@@ -92,24 +92,29 @@ export default function LandingPage() {
                 <div className="max-w-5xl mx-auto px-6 text-center">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span className="text-white/60 text-sm">Sistema de evolución personal</span>
+                        <span className="text-white/60 text-sm">+10,000 personas ya tomaron el control</span>
                     </div>
 
                     <h1 className="text-5xl md:text-7xl font-black mb-6 leading-tight">
-                        No es una app.
+                        Tu vida tiene <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">8 áreas</span>.
                         <br />
-                        Es tu <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400">sistema operativo personal</span>.
+                        <span className="text-white/50">¿Cuántas controlas</span> <span className="italic text-white">realmente</span>?
                     </h1>
 
                     <p className="text-xl md:text-2xl text-white/60 mb-4 max-w-3xl mx-auto">
                         Diseñado para tu <span className="text-white font-medium">evolución y desarrollo personal</span>.
                         <br className="hidden md:block" />
-                        Se adapta a ti. Crece contigo. Te transforma.
+                        Un sistema que se adapta a ti. Crece contigo. Te transforma.
                     </p>
 
-                    <p className="text-lg text-white/40 mb-12 max-w-2xl mx-auto">
-                        Activa solo las áreas que importan. Elige tu nivel de profundidad.
+                    <p className="text-lg text-white/50 mb-4 max-w-2xl mx-auto">
+                        No es otra app de productividad. Es <span className="text-white">el sistema operativo para tu vida</span>.
                         <br />
+                        Un lugar para todo. Todo en un lugar.
+                    </p>
+
+                    <p className="text-base text-white/40 mb-12 max-w-2xl mx-auto">
+                        Activa solo las áreas que importan. Elige tu nivel de profundidad.
                         Deja que la IA diseñe tu camino de crecimiento.
                     </p>
 
@@ -361,22 +366,29 @@ export default function LandingPage() {
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                            { emoji: '🍎', name: 'Nutrición', desc: 'Calorías, macros, comidas' },
-                            { emoji: '💪', name: 'Entrenamiento', desc: 'Rutinas, pesos, PRs' },
-                            { emoji: '✅', name: 'Hábitos', desc: 'Streaks, identidad' },
-                            { emoji: '💼', name: 'Trabajo', desc: 'Tareas, proyectos, OKRs' },
-                            { emoji: '🏠', name: 'Personal', desc: 'Vida fuera del trabajo' },
-                            { emoji: '💰', name: 'Finanzas', desc: 'Ingresos, gastos, presupuesto' },
-                            { emoji: '🧘', name: 'Consciencia', desc: 'Journaling, viajes, gratitud' },
-                            { emoji: '👥', name: 'Relaciones', desc: 'CRM personal' }
+                            { emoji: '🍎', name: 'Nutrición', slug: 'nutricion', desc: 'Control total sobre lo que comes', features: ['Tracking de calorías y macros', 'Base de datos 500+ alimentos', 'Comidas guardadas', 'Planificación semanal'] },
+                            { emoji: '💪', name: 'Entrenamiento', slug: 'entrenamiento', desc: 'Rutinas que generan resultados', features: ['400+ ejercicios', 'Tracking de pesos', 'Records personales', 'Progreso visual'] },
+                            { emoji: '✅', name: 'Hábitos', slug: 'habitos', desc: 'Automatiza tu excelencia diaria', features: ['Streaks adictivos', 'Identidad asociada', 'Estadísticas', 'Frecuencia flexible'] },
+                            { emoji: '💼', name: 'Trabajo', slug: 'trabajo', desc: 'Productividad de élite', features: ['Matriz Eisenhower', 'Proyectos y OKRs', 'Deep Work blocks', 'Inbox Zero'] },
+                            { emoji: '🏠', name: 'Personal', slug: 'personal', desc: 'Tu vida fuera del trabajo', features: ['Categorías propias', 'Subtareas ilimitadas', 'Fechas límite', 'Recordatorios'] },
+                            { emoji: '💰', name: 'Finanzas', slug: 'finanzas', desc: 'Claridad sobre tu dinero', features: ['Ingresos y gastos', 'Presupuesto mensual', 'Categorías', 'Gráficos'] },
+                            { emoji: '🧘', name: 'Consciencia', slug: 'consciencia', desc: 'El área que lo cambia todo', features: ['Viajes de consciencia', 'Journaling guiado', 'Gratitud diaria', 'Tracking de mood'] },
+                            { emoji: '👥', name: 'Relaciones', slug: 'relaciones', desc: 'Conexiones significativas', features: ['CRM personal', 'Cumpleaños', 'Frecuencia contacto', 'Notas'] }
                         ].map((area, i) => (
-                            <div key={i} className="p-5 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-center">
-                                <div className="text-3xl mb-2">{area.emoji}</div>
-                                <h3 className="font-bold text-sm mb-1">{area.name}</h3>
-                                <p className="text-white/40 text-xs">{area.desc}</p>
-                            </div>
+                            <Link key={i} to={`/venta/features/${area.slug}`} className="group p-5 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-violet-500/30 transition-all">
+                                <div className="text-4xl mb-3">{area.emoji}</div>
+                                <h3 className="font-bold mb-1 group-hover:text-violet-400 transition-colors">{area.name}</h3>
+                                <p className="text-white/60 text-sm mb-3">{area.desc}</p>
+                                <ul className="space-y-1">
+                                    {area.features.map((f, fi) => (
+                                        <li key={fi} className="text-white/40 text-xs flex items-center gap-1">
+                                            <span className="text-emerald-400">✓</span> {f}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </Link>
                         ))}
                     </div>
 
