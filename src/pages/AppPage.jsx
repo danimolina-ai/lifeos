@@ -12134,7 +12134,7 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
 
   // Main state
   const [view, setView] = useState('home'); // home, routines, routine-builder, exercise-library, workout, history
-  const [workout, setWorkout] = useState(data.workouts.find(w => w.day_id === today && !w.is_completed));
+  const [workout, setWorkout] = useState((data.workouts || []).find(w => w.day_id === today && !w.is_completed));
   const [selectedRoutine, setSelectedRoutine] = useState(null);
   const [editingRoutine, setEditingRoutine] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -12185,7 +12185,7 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
 
   // Sync workout
   useEffect(() => {
-    const active = data.workouts.find(w => w.day_id === today && !w.is_completed);
+    const active = (data.workouts || []).find(w => w.day_id === today && !w.is_completed);
     setWorkout(active);
     if (active && view === 'home') setView('workout');
   }, [data.workouts, today]);
