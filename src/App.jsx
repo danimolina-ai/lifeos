@@ -231,32 +231,50 @@ function UserAvatar() {
     )
 }
 
-// Sync Status Indicator - TIER 2
+// Sync Status Indicator - TIER 2 - Always visible for debugging
 function SyncIndicator() {
+    const { user } = useAuth()
     const [status, setStatus] = useState('idle')
+    const [lastSyncTime, setLastSyncTime] = useState(null)
 
     // Listen for sync status changes
     useEffect(() => {
-        const handleStatusChange = (e) => setStatus(e.detail)
+        const handleStatusChange = (e) => {
+            setStatus(e.detail)
+            if (e.detail === 'synced') {
+                setLastSyncTime(new Date())
+            }
+        }
         window.addEventListener('syncStatusChange', handleStatusChange)
         return () => window.removeEventListener('syncStatusChange', handleStatusChange)
     }, [])
 
-    if (status === 'idle') return null
+    // Force sync on tap
+    const handleTap = async () => {
+        if (window.lifeosSyncForce) {
+            await window.lifeosSyncForce()
+        }
+    }
 
     const statusConfig = {
-        syncing: { icon: '⟳', color: 'text-blue-400', label: 'Sincronizando...', animate: 'animate-spin' },
-        synced: { icon: '✓', color: 'text-emerald-400', label: 'Guardado', animate: '' },
-        error: { icon: '⚠', color: 'text-red-400', label: 'Error de sync', animate: '' }
+        idle: { icon: '☁️', color: 'text-white/40', bg: 'bg-white/5', label: user ? 'Listo' : 'Sin usuario' },
+        syncing: { icon: '⟳', color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'Guardando...' },
+        synced: { icon: '✓', color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'Guardado' },
+        error: { icon: '⚠', color: 'text-red-400', bg: 'bg-red-500/10', label: 'Error' }
     }
 
     const config = statusConfig[status] || statusConfig.idle
 
     return (
-        <div className={`flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 ${config.color} text-xs`}>
-            <span className={config.animate}>{config.icon}</span>
+        <button
+            onClick={handleTap}
+            title={`Estado: ${config.label}${lastSyncTime ? ` (${lastSyncTime.toLocaleTimeString()})` : ''}\nToca para forzar sincronización`}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg ${config.bg} ${config.color} text-xs transition-all hover:scale-105 active:scale-95`}
+        >
+            <span className={status === 'syncing' ? 'animate-spin' : ''}>{config.icon}</span>
             <span className="hidden sm:inline">{config.label}</span>
-        </div>
+            {!user && <span className="text-red-400 text-[10px]">!</span>}
+        </button>
     )
 }
 
