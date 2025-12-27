@@ -2142,6 +2142,19 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
     return ex ? { ...ex, date: workouts[0].day_id } : null;
   };
 
+  // Workout helper: Start workout (set started_at timestamp)
+  const workoutStart = () => {
+    if (!activeWorkout) return;
+    setData(prev => ({
+      ...prev,
+      workouts: prev.workouts.map(w => w.id === activeWorkout.id ? {
+        ...w,
+        started_at: new Date().toISOString()
+      } : w)
+    }));
+    showToast('¡Entreno iniciado! 💪');
+  };
+
   // Get routines (use defaults if no custom routines exist) - same logic as WorkoutScreen
   const routines = data.workoutRoutines?.length > 0 ? data.workoutRoutines : DEFAULT_ROUTINES;
 
@@ -3503,6 +3516,48 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                         </div>
                       )}
                     </div>
+                  ) : activeWorkout && !activeWorkout.started_at ? (
+                    /* Workout Preview - before starting */
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-lg">{activeWorkout.name}</p>
+                          <p className="text-xs text-white/50">{activeWorkout.exercises.length} ejercicios · Preview</p>
+                        </div>
+                        <button
+                          onClick={workoutCancel}
+                          className="p-1.5 text-white/40 hover:text-red-400"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Exercise preview list */}
+                      <div className="space-y-2">
+                        {activeWorkout.exercises.map((ex, i) => (
+                          <div key={ex.id} className="p-3 bg-white/5 rounded-xl flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center text-sm font-bold text-violet-400">
+                              {i + 1}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{ex.name}</p>
+                              <p className="text-xs text-white/40">{ex.targetSets} sets × {ex.targetReps} reps</p>
+                            </div>
+                            {getExercisePR(ex.exerciseId) && (
+                              <span className="text-xs text-yellow-400">🏆 {getExercisePR(ex.exerciseId).weight}kg</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Start button */}
+                      <button
+                        onClick={workoutStart}
+                        className="w-full py-4 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold text-lg flex items-center justify-center gap-2"
+                      >
+                        <Play className="w-5 h-5" /> Comenzar entreno
+                      </button>
+                    </div>
                   ) : activeWorkout ? (
                     <div className="space-y-4">
                       {/* Workout Header with Timer */}
@@ -3740,7 +3795,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                     id: `workout-${Date.now()}`,
                                     day_id: viewDate,
                                     name: template.name,
-                                    started_at: new Date().toISOString(),
+                                    started_at: null,
                                     is_completed: false,
                                     templateId: template.id,
                                     exercises: (template.exercises || []).map(e => ({
@@ -3824,7 +3879,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                                   id: `workout-${Date.now()}`,
                                                   day_id: viewDate,
                                                   name: r.name,
-                                                  started_at: new Date().toISOString(),
+                                                  started_at: null,
                                                   is_completed: false,
                                                   templateId: r.id,
                                                   exercises: (r.exercises || []).map(e => ({
@@ -12830,7 +12885,10 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
   const todayScheduled = scheduledWorkouts.find(s => s.date === today);
   const todayRecurring = recurringWorkouts.find(r => r.dayOfWeek === todayDayOfWeek);
   const todayRoutine = todayScheduled ? routines.find(r => r.id === todayScheduled.routineId) : todayRecurring ? routines.find(r => r.id === todayRecurring.routineId) : null;
-  const folders = [...new Set(routines.map(r => r.folder))];
+  // Get unique folders, filtering out undefined/empty and adding 'General' for routines without folder
+  const allFolders = [...new Set(routines.map(r => r.folder).filter(f => f))];
+  const hasUnfolderedRoutines = routines.some(r => !r.folder);
+  const folders = hasUnfolderedRoutines ? [...allFolders, 'General'] : allFolders;
 
 
   // PR functions - compatible with old and new data formats
@@ -13705,7 +13763,7 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
           <AnimatedMount key={folder} delay={50 + fi * 25}>
             <Section title={folder.toUpperCase()} icon={Calendar} iconColor="text-violet-400">
               <div className="space-y-2">
-                {routines.filter(r => r.folder === folder).map(routine => (
+                {routines.filter(r => folder === 'General' ? !r.folder : r.folder === folder).map(routine => (
                   <Card key={routine.id}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3" onClick={() => startWorkout(routine)}>
