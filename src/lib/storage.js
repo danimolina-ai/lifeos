@@ -68,10 +68,10 @@ const loadFromSupabase = async () => {
 
         const { data, error } = await supabase
             .from('user_data')
-            .select('data')
+            .select('data, updated_at')
             .eq('user_id', currentUser.id)
             .eq('key', 'lifeOS_v58')
-            .maybeSingle() // Use maybeSingle instead of single to avoid error when no data
+            .maybeSingle()
 
         if (error) {
             console.error('[Storage] Load error:', error)
@@ -81,19 +81,30 @@ const loadFromSupabase = async () => {
         }
 
         if (data && data.data) {
-            console.log('[Storage] Found data in Supabase')
-            const currentData = localStorage.getItem('lifeOS_v58')
-            const newData = JSON.stringify(data.data)
+            const supabaseUpdatedAt = new Date(data.updated_at).getTime()
+            const localUpdatedAt = parseInt(localStorage.getItem('lifeOS_lastSync') || '0')
 
-            if (currentData !== newData) {
-                console.log('[Storage] Syncing from Supabase to localStorage')
+            console.log('[Storage] Supabase updated:', new Date(supabaseUpdatedAt).toISOString())
+            console.log('[Storage] Local lastSync:', new Date(localUpdatedAt).toISOString())
+
+            // Always use Supabase data if it's newer than our last sync
+            if (supabaseUpdatedAt > localUpdatedAt) {
+                console.log('[Storage] Supabase has newer data, syncing...')
+                const newData = JSON.stringify(data.data)
+
                 // Use original setItem to avoid triggering save loop
                 const originalSetItem = Object.getPrototypeOf(localStorage).setItem.bind(localStorage)
                 originalSetItem('lifeOS_v58', newData)
+                originalSetItem('lifeOS_lastSync', supabaseUpdatedAt.toString())
+
                 updateSyncStatus('synced')
+                setTimeout(() => updateSyncStatus('idle'), 2000)
+
                 // Reload to refresh UI
                 window.location.reload()
                 return
+            } else {
+                console.log('[Storage] Local data is current or newer')
             }
         } else {
             console.log('[Storage] No data in Supabase yet')
@@ -103,6 +114,7 @@ const loadFromSupabase = async () => {
         setTimeout(() => updateSyncStatus('idle'), 2000)
 
     } catch (err) {
+
         console.error('[Storage] Load error:', err)
         updateSyncStatus('error')
         setTimeout(() => updateSyncStatus('idle'), 3000)
@@ -146,6 +158,9 @@ const saveToSupabase = async (key, value) => {
                 setTimeout(() => updateSyncStatus('idle'), 3000)
             } else {
                 console.log('[Storage] Saved successfully')
+                // Update lastSync timestamp so we don't download our own changes
+                const originalSetItem = Object.getPrototypeOf(localStorage).setItem.bind(localStorage)
+                originalSetItem('lifeOS_lastSync', Date.now().toString())
                 updateSyncStatus('synced')
                 setTimeout(() => updateSyncStatus('idle'), 2000)
             }
