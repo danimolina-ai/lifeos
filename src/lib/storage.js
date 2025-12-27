@@ -367,8 +367,9 @@ localStorage.setItem = function (key, value) {
     // Call original
     originalSetItem(key, value)
 
-    // Also save to Supabase if user is logged in
-    if (currentUser && key === 'lifeOS_v58') {
+    // Trigger sync for lifeOS data - saveToSupabase will handle user detection
+    if (key === 'lifeOS_v58') {
+        console.log('[Storage] 🔔 Intercepted lifeOS data save')
         saveToSupabase(key, value)
     }
 }
