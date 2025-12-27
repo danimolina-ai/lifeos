@@ -15,6 +15,60 @@ const updateSyncStatus = (status) => {
 // Export sync status getter
 const getSyncStatus = () => syncStatus
 
+// Force sync from cloud (ignores local timestamp)
+const forceSync = async () => {
+    if (!currentUser) {
+        console.log('[Storage] No user, cannot force sync')
+        return false
+    }
+
+    try {
+        console.log('[Storage] 🔄 FORCING sync from Supabase...')
+        updateSyncStatus('syncing')
+
+        const { data, error } = await supabase
+            .from('user_data')
+            .select('data, updated_at')
+            .eq('user_id', currentUser.id)
+            .eq('key', 'lifeOS_v58')
+            .maybeSingle()
+
+        if (error) {
+            console.error('[Storage] Force sync error:', error)
+            updateSyncStatus('error')
+            return false
+        }
+
+        if (data && data.data) {
+            console.log('[Storage] ✅ Force sync: Got data from Supabase, applying...')
+            const newData = JSON.stringify(data.data)
+            const supabaseUpdatedAt = new Date(data.updated_at).getTime()
+
+            const originalSetItem = Object.getPrototypeOf(localStorage).setItem.bind(localStorage)
+            originalSetItem('lifeOS_v58', newData)
+            originalSetItem('lifeOS_lastSync', supabaseUpdatedAt.toString())
+
+            updateSyncStatus('synced')
+            window.location.reload()
+            return true
+        } else {
+            console.log('[Storage] No data in Supabase to sync')
+            updateSyncStatus('idle')
+            return false
+        }
+    } catch (err) {
+        console.error('[Storage] Force sync error:', err)
+        updateSyncStatus('error')
+        return false
+    }
+}
+
+// Expose forceSync globally for debugging
+if (typeof window !== 'undefined') {
+    window.lifeosSyncForce = forceSync
+    window.lifeosSyncStatus = getSyncStatus
+}
+
 // Initialize: get current user and set up listener
 const init = async () => {
     if (isInitialized) return
@@ -207,4 +261,4 @@ localStorage.setItem = function (key, value) {
 // Initialize on load
 init()
 
-export { currentUser, init, getSyncStatus }
+export { currentUser, init, getSyncStatus, forceSync }
