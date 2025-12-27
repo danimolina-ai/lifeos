@@ -1872,6 +1872,9 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
   const dayTasks = (data.tasks || []).filter(t => t.day_id === viewDate);
   const dayJournal = data.journals?.find(j => j.date === viewDate);
 
+  // Get routines (use defaults if no custom routines exist) - same logic as WorkoutScreen
+  const routines = data.workoutRoutines?.length > 0 ? data.workoutRoutines : DEFAULT_ROUTINES;
+
   // Get habit logs for this day (initialize if needed)
   const dayHabitLogs = useMemo(() => {
     return (data.habits || []).map(habit => {
@@ -3497,12 +3500,12 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                     <div className="text-center py-4">
                       <p className="text-white/50 mb-4">Sin entreno programado para hoy</p>
 
-                      {/* Show available templates if any exist */}
-                      {((data.workoutTemplates && data.workoutTemplates.length > 0) || (data.workoutRoutines && data.workoutRoutines.length > 0)) ? (
+                      {/* Show available templates - always has routines (defaults if no custom) */}
+                      {routines.length > 0 ? (
                         <div className="space-y-3">
                           <p className="text-white/40 text-sm">Elige una plantilla:</p>
                           <div className="flex flex-wrap gap-2 justify-center">
-                            {(data.workoutRoutines?.length > 0 ? data.workoutRoutines : data.workoutTemplates || []).slice(0, 3).map(template => (
+                            {routines.slice(0, 3).map(template => (
                               <button
                                 key={template.id}
                                 onClick={() => {
@@ -3546,12 +3549,14 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                             ))}
                           </div>
                           <div className="flex gap-2 justify-center mt-2">
-                            <button
-                              onClick={() => setShowTemplateModal(true)}
-                              className="px-4 py-2 text-violet-400 text-sm hover:text-violet-300 inline-flex items-center gap-1"
-                            >
-                              Ver todas <ArrowRight className="w-3 h-3" />
-                            </button>
+                            {routines.length > 3 && (
+                              <button
+                                onClick={() => setShowTemplateModal(true)}
+                                className="px-4 py-2 text-violet-400 text-sm hover:text-violet-300 inline-flex items-center gap-1"
+                              >
+                                Ver todas ({routines.length}) <ArrowRight className="w-3 h-3" />
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 const newWorkout = {
@@ -12172,72 +12177,63 @@ const WorkScreen = ({ data, setData, showToast }) => {
       {/* Template Selection Modal */}
       <Modal isOpen={showTemplateModal} onClose={() => setShowTemplateModal(false)} title="Seleccionar Plantilla">
         <div className="space-y-4">
-          {/* Available templates */}
-          {(data.workoutRoutines?.length > 0 || data.workoutTemplates?.length > 0) ? (
-            <div className="space-y-2">
-              <p className="text-sm text-white/50 mb-3">Elige una rutina para empezar:</p>
-              <div className="max-h-64 overflow-y-auto space-y-2">
-                {/* Use routines if available, otherwise use templates */}
-                {(data.workoutRoutines?.length > 0 ? data.workoutRoutines : data.workoutTemplates || []).map(routine => (
-                  <button
-                    key={routine.id}
-                    onClick={() => {
-                      // Create workout from routine/template
-                      const newWorkout = {
-                        id: `workout-${Date.now()}`,
-                        day_id: viewDate,
-                        name: routine.name,
-                        started_at: new Date().toISOString(),
-                        is_completed: false,
-                        templateId: routine.id,
-                        exercises: (routine.exercises || []).map(e => ({
-                          id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                          exerciseId: e.exerciseId || e.id,
-                          name: e.name || 'Ejercicio',
-                          targetSets: e.sets || e.targetSets || 3,
-                          targetReps: e.reps || e.targetReps || '8',
-                          restSeconds: e.restSeconds || 90,
-                          notes: e.notes || '',
-                          sets: Array.from({ length: e.sets || e.targetSets || 3 }, () => ({
-                            id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                            weight: null,
-                            reps: null,
-                            rpe: null,
-                            setType: 'normal',
-                            completed: false
-                          }))
+          {/* Available templates - always has routines with defaults */}
+          <div className="space-y-2">
+            <p className="text-sm text-white/50 mb-3">Elige una rutina para empezar:</p>
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {routines.map(routine => (
+                <button
+                  key={routine.id}
+                  onClick={() => {
+                    // Create workout from routine/template
+                    const newWorkout = {
+                      id: `workout-${Date.now()}`,
+                      day_id: viewDate,
+                      name: routine.name,
+                      started_at: new Date().toISOString(),
+                      is_completed: false,
+                      templateId: routine.id,
+                      exercises: (routine.exercises || []).map(e => ({
+                        id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                        exerciseId: e.exerciseId || e.id,
+                        name: e.name || 'Ejercicio',
+                        targetSets: e.sets || e.targetSets || 3,
+                        targetReps: e.reps || e.targetReps || '8',
+                        restSeconds: e.restSeconds || 90,
+                        notes: e.notes || '',
+                        sets: Array.from({ length: e.sets || e.targetSets || 3 }, () => ({
+                          id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                          weight: null,
+                          reps: null,
+                          rpe: null,
+                          setType: 'normal',
+                          completed: false
                         }))
-                      };
-                      setData(prev => ({
-                        ...prev,
-                        workouts: [...(prev.workouts || []), newWorkout]
-                      }));
-                      setShowTemplateModal(false);
-                      showToast(`${routine.name} iniciado 💪`);
-                    }}
-                    className="w-full p-4 bg-white/10 hover:bg-white/20 rounded-xl text-left transition-all flex items-center justify-between group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-violet-500/20 rounded-lg flex items-center justify-center">
-                        <Dumbbell className="w-5 h-5 text-violet-400" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{routine.name}</p>
-                        <p className="text-xs text-white/50">{routine.exercises?.length || 0} ejercicios</p>
-                      </div>
+                      }))
+                    };
+                    setData(prev => ({
+                      ...prev,
+                      workouts: [...(prev.workouts || []), newWorkout]
+                    }));
+                    setShowTemplateModal(false);
+                    showToast(`${routine.name} iniciado 💪`);
+                  }}
+                  className="w-full p-4 bg-white/10 hover:bg-white/20 rounded-xl text-left transition-all flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-violet-500/20 rounded-lg flex items-center justify-center">
+                      <Dumbbell className="w-5 h-5 text-violet-400" />
                     </div>
-                    <Play className="w-5 h-5 text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                ))}
-              </div>
+                    <div>
+                      <p className="font-medium">{routine.name}</p>
+                      <p className="text-xs text-white/50">{routine.exercises?.length || 0} ejercicios</p>
+                    </div>
+                  </div>
+                  <Play className="w-5 h-5 text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              ))}
             </div>
-          ) : (
-            <div className="text-center py-6">
-              <Dumbbell className="w-12 h-12 mx-auto text-white/20 mb-3" />
-              <p className="text-white/50">No tienes plantillas creadas</p>
-              <p className="text-sm text-white/30 mt-1">Crea tu primera plantilla para empezar más rápido</p>
-            </div>
-          )}
+          </div>
 
           {/* Divider */}
           <div className="border-t border-white/10 pt-4">
