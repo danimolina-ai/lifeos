@@ -3551,7 +3551,10 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                           <div className="flex gap-2 justify-center mt-2">
                             {routines.length > 3 && (
                               <button
-                                onClick={() => setShowTemplateModal(true)}
+                                onClick={() => {
+                                  console.log('Ver todas clicked, showTemplateModal will be set to true');
+                                  setShowTemplateModal(true);
+                                }}
                                 className="px-4 py-2 text-violet-400 text-sm hover:text-violet-300 inline-flex items-center gap-1"
                               >
                                 Ver todas ({routines.length}) <ArrowRight className="w-3 h-3" />
