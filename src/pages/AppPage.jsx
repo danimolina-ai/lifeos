@@ -1357,21 +1357,31 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
 
 const Toast = ({ message, type = 'success', onClose }) => {
   useEffect(() => {
-    const t = setTimeout(onClose, 3000);
+    const t = setTimeout(onClose, type === 'celebration' ? 4000 : 3000);
     return () => clearTimeout(t);
-  }, [onClose]);
+  }, [onClose, type]);
 
   const colors = {
     success: 'bg-emerald-500',
     info: 'bg-blue-500',
     warning: 'bg-amber-500',
-    error: 'bg-red-500'
+    error: 'bg-red-500',
+    celebration: 'bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500'
+  };
+
+  const icons = {
+    success: <Check className="w-5 h-5" />,
+    info: <Sparkles className="w-5 h-5" />,
+    warning: <AlertCircle className="w-5 h-5" />,
+    error: <X className="w-5 h-5" />,
+    celebration: <span className="text-xl">🎉</span>
   };
 
   return (
-    <div className={`fixed top-6 left-1/2 -translate-x-1/2 ${colors[type]} px-6 py-3 rounded-xl shadow-2xl z-50 animate-slide-down flex items-center gap-2`}>
-      <Check className="w-5 h-5" />
+    <div className={`fixed top-6 left-1/2 -translate-x-1/2 ${colors[type]} px-6 py-3 rounded-xl shadow-2xl z-50 animate-slide-down flex items-center gap-2 ${type === 'celebration' ? 'scale-110' : ''}`}>
+      {icons[type] || icons.success}
       <span className="font-medium">{message}</span>
+      {type === 'celebration' && <span className="text-xl">✨</span>}
     </div>
   );
 };
@@ -2047,8 +2057,10 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
 
   const toggleHabit = (habitId, useMinVersion = false) => {
     const existingLog = data.habitLogs?.find(l => l.habit_id === habitId && l.date === viewDate);
+    const habit = data.habits.find(h => h.id === habitId);
 
     if (existingLog) {
+      const wasCompleted = existingLog.completed;
       setData(prev => ({
         ...prev,
         habitLogs: prev.habitLogs.map(l =>
@@ -2057,6 +2069,10 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
             : l
         )
       }));
+      // Celebration when completing (not uncompleting)
+      if (!wasCompleted) {
+        showToast(`${habit?.icon || '✅'} ¡${habit?.name || 'Hábito'} completado!`, 'celebration');
+      }
     } else {
       setData(prev => ({
         ...prev,
@@ -2069,6 +2085,8 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
           usedMinVersion: useMinVersion
         }]
       }));
+      // Celebration for new completion
+      showToast(`${habit?.icon || '✅'} ¡${habit?.name || 'Hábito'} completado!`, 'celebration');
     }
   };
 

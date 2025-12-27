@@ -1,5 +1,5 @@
 // Main App with Auth
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { supabase } from './lib/supabase'
@@ -191,6 +191,35 @@ function UserAvatar() {
     )
 }
 
+// Sync Status Indicator - TIER 2
+function SyncIndicator() {
+    const [status, setStatus] = useState('idle')
+
+    // Listen for sync status changes
+    useEffect(() => {
+        const handleStatusChange = (e) => setStatus(e.detail)
+        window.addEventListener('syncStatusChange', handleStatusChange)
+        return () => window.removeEventListener('syncStatusChange', handleStatusChange)
+    }, [])
+
+    if (status === 'idle') return null
+
+    const statusConfig = {
+        syncing: { icon: '⟳', color: 'text-blue-400', label: 'Sincronizando...', animate: 'animate-spin' },
+        synced: { icon: '✓', color: 'text-emerald-400', label: 'Guardado', animate: '' },
+        error: { icon: '⚠', color: 'text-red-400', label: 'Error de sync', animate: '' }
+    }
+
+    const config = statusConfig[status] || statusConfig.idle
+
+    return (
+        <div className={`flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 ${config.color} text-xs`}>
+            <span className={config.animate}>{config.icon}</span>
+            <span className="hidden sm:inline">{config.label}</span>
+        </div>
+    )
+}
+
 // Global Header - like Notion/Slack style
 function GlobalHeader() {
     const goToSettings = () => {
@@ -204,6 +233,7 @@ function GlobalHeader() {
                 <span className="text-white/80 font-medium text-sm">Life OS</span>
             </div>
             <div className="flex items-center gap-3">
+                <SyncIndicator />
                 <button
                     onClick={goToSettings}
                     className="p-2 hover:bg-white/10 rounded-lg transition-colors"

@@ -5,6 +5,17 @@ import { supabase } from './supabase'
 let currentUser = null
 let isInitialized = false
 
+// TIER 2: Sync status tracking
+let syncStatus = 'idle' // idle, syncing, synced, error
+const updateSyncStatus = (status) => {
+    syncStatus = status
+    // Dispatch custom event for UI to listen
+    window.dispatchEvent(new CustomEvent('syncStatusChange', { detail: status }))
+}
+
+// Export sync status getter
+const getSyncStatus = () => syncStatus
+
 // Initialize: get current user and set up listener
 const init = async () => {
     if (isInitialized) return
@@ -39,6 +50,7 @@ const loadFromSupabase = async () => {
     if (!currentUser) return
 
     try {
+        updateSyncStatus('syncing')
         const { data, error } = await supabase
             .from('user_data')
             .select('data')
@@ -57,9 +69,11 @@ const loadFromSupabase = async () => {
                 window.location.reload()
             }
         }
+        updateSyncStatus('synced')
     } catch (err) {
         // No data yet, that's ok
         console.log('[Storage] No existing data in Supabase')
+        updateSyncStatus('idle')
     }
 }
 
@@ -70,6 +84,8 @@ const saveToSupabase = async (key, value) => {
 
     // Clear previous timeout
     if (saveTimeout) clearTimeout(saveTimeout)
+
+    updateSyncStatus('syncing')
 
     // Debounce: wait 2 seconds before saving
     saveTimeout = setTimeout(async () => {
@@ -89,11 +105,14 @@ const saveToSupabase = async (key, value) => {
 
             if (error) {
                 console.error('[Storage] Save error:', error)
+                updateSyncStatus('error')
             } else {
                 console.log('[Storage] Saved to Supabase')
+                updateSyncStatus('synced')
             }
         } catch (err) {
             console.error('[Storage] Save error:', err)
+            updateSyncStatus('error')
         }
     }, 2000)
 }
@@ -113,4 +132,5 @@ localStorage.setItem = function (key, value) {
 // Initialize on load
 init()
 
-export { currentUser, init }
+export { currentUser, init, getSyncStatus }
+
