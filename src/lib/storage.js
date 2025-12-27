@@ -280,13 +280,13 @@ const doSave = async (key, value, userId) => {
 // CRITICAL: Save immediately when page is about to be hidden (mobile browser switching, closing tab, etc.)
 if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden' && pendingSaveData) {
+        if (document.visibilityState === 'hidden' && pendingSaveData && pendingSaveData.userId) {
             console.log('[Storage] 📱 Page hiding, saving immediately...')
             // Use sendBeacon or synchronous approach for page unload
-            if (navigator.sendBeacon && currentUser) {
+            if (navigator.sendBeacon) {
                 const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/user_data?on_conflict=user_id,key`
                 const data = JSON.stringify({
-                    user_id: currentUser.id,
+                    user_id: pendingSaveData.userId,
                     key: pendingSaveData.key,
                     data: JSON.parse(pendingSaveData.value),
                     updated_at: new Date().toISOString()
@@ -306,7 +306,7 @@ if (typeof document !== 'undefined') {
                 }).catch(e => console.error('[Storage] Beacon save error:', e))
             } else {
                 // Fallback: try immediate save
-                doSave(pendingSaveData.key, pendingSaveData.value)
+                doSave(pendingSaveData.key, pendingSaveData.value, pendingSaveData.userId)
             }
             pendingSaveData = null
         }
@@ -314,7 +314,7 @@ if (typeof document !== 'undefined') {
 
     // Also handle beforeunload for desktop
     window.addEventListener('beforeunload', () => {
-        if (pendingSaveData && currentUser) {
+        if (pendingSaveData && pendingSaveData.userId) {
             console.log('[Storage] 📤 Page unloading, saving...')
             // Synchronous XHR as last resort (deprecated but works for unload)
             const xhr = new XMLHttpRequest()
@@ -325,7 +325,7 @@ if (typeof document !== 'undefined') {
             xhr.setRequestHeader('Prefer', 'resolution=merge-duplicates')
             try {
                 xhr.send(JSON.stringify({
-                    user_id: currentUser.id,
+                    user_id: pendingSaveData.userId,
                     key: pendingSaveData.key,
                     data: JSON.parse(pendingSaveData.value),
                     updated_at: new Date().toISOString()
