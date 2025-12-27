@@ -1892,9 +1892,9 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
   // Detect active workout (not completed) for today
   const activeWorkout = (data.workouts || []).find(w => w.day_id === viewDate && !w.is_completed);
 
-  // Elapsed time effect for active workout
+  // Elapsed time effect for active workout - only runs when workout has started
   useEffect(() => {
-    if (activeWorkout && !activeWorkout.is_completed) {
+    if (activeWorkout && !activeWorkout.is_completed && activeWorkout.started_at) {
       const startTime = new Date(activeWorkout.started_at).getTime();
       const updateElapsed = () => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -1903,8 +1903,10 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
       updateElapsed();
       const interval = setInterval(updateElapsed, 1000);
       return () => clearInterval(interval);
+    } else {
+      setWorkoutElapsedTime(0);
     }
-  }, [activeWorkout?.id, activeWorkout?.is_completed]);
+  }, [activeWorkout?.id, activeWorkout?.is_completed, activeWorkout?.started_at]);
 
   // Rest timer countdown effect
   useEffect(() => {
@@ -12713,7 +12715,7 @@ const WorkScreen = ({ data, setData, showToast }) => {
                       id: `workout-${Date.now()}`,
                       day_id: viewDate,
                       name: routine.name,
-                      started_at: new Date().toISOString(),
+                      started_at: null,
                       is_completed: false,
                       templateId: routine.id,
                       exercises: (routine.exercises || []).map(e => ({
@@ -12839,15 +12841,18 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
   }, [data.workouts, today]);
 
 
-  // Elapsed time
+  // Elapsed time - only runs when workout has started
   useEffect(() => {
-    if (!workout || workout.is_completed) return;
+    if (!workout || workout.is_completed || !workout.started_at) {
+      setElapsedTime(0);
+      return;
+    }
     const start = new Date(workout.started_at).getTime();
     const interval = setInterval(() => {
       setElapsedTime(Math.floor((Date.now() - start) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  }, [workout]);
+  }, [workout?.id, workout?.is_completed, workout?.started_at]);
 
 
   // Rest timer countdown
@@ -12965,7 +12970,7 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
       day_id: today,
       routineId: routine.id,
       name: routine.name,
-      started_at: new Date().toISOString(),
+      started_at: null,
       is_completed: false,
       exercises: routine.exercises.map(e => {
         const lastPerf = getLastPerformance(e.exerciseId);
@@ -14221,6 +14226,7 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
   }
 
 
+
   // =========================================================================
   // RENDER: ACTIVE WORKOUT
   // =========================================================================
@@ -14228,7 +14234,80 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
     const totals = getWorkoutTotals();
     const progress = totals.totalSets > 0 ? (totals.sets / totals.totalSets) * 100 : 0;
 
+    // PREVIEW MODE - workout not started yet
+    if (!workout.started_at) {
+      return (
+        <div className="space-y-4 pb-32">
+          <AnimatedMount>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold">{workout.name}</h1>
+                <p className="text-white/50 text-sm">{workout.exercises.length} ejercicios · Preview</p>
+              </div>
+              <button
+                onClick={cancelWorkout}
+                className="p-2 bg-red-500/20 rounded-lg text-red-400 hover:bg-red-500/30"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </AnimatedMount>
 
+          {/* Exercise preview list */}
+          <AnimatedMount delay={25}>
+            <div className="space-y-2">
+              {workout.exercises.map((ex, i) => (
+                <Card key={ex.id}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center text-lg font-bold text-violet-400">
+                      {i + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{ex.name}</p>
+                      <p className="text-sm text-white/40">{ex.targetSets} sets × {ex.targetReps} reps</p>
+                    </div>
+                    {getPR(ex.exerciseId) && (
+                      <span className="text-sm text-yellow-400">🏆 {getPR(ex.exerciseId).weight}kg</span>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </AnimatedMount>
+
+          {/* Add exercise button */}
+          <AnimatedMount delay={50}>
+            <button
+              onClick={() => setShowExercisePicker(true)}
+              className="w-full py-3 border border-dashed border-white/20 rounded-xl text-white/50 hover:border-violet-500/50 hover:text-violet-400 flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Añadir ejercicio
+            </button>
+          </AnimatedMount>
+
+          {/* Start button */}
+          <AnimatedMount delay={75}>
+            <button
+              onClick={() => {
+                setData(prev => ({
+                  ...prev,
+                  workouts: prev.workouts.map(w => w.id === workout.id ? {
+                    ...w,
+                    started_at: new Date().toISOString()
+                  } : w)
+                }));
+                showToast('¡Entreno iniciado! 💪');
+              }}
+              className="w-full py-4 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold text-lg flex items-center justify-center gap-2"
+            >
+              <Play className="w-5 h-5" /> Comenzar entreno
+            </button>
+          </AnimatedMount>
+        </div>
+      );
+    }
+
+    // TRACKING MODE - workout has started
     return (
       <div className="space-y-4 pb-32">
         {/* Header */}
