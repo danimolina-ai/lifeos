@@ -1,5 +1,6 @@
 // Life OS v5.2 - Relationships & Personal v2
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { Utensils, Dumbbell, Target, CheckSquare, Calendar, CalendarDays, BarChart3, Plus, ChevronLeft, ChevronRight, ChevronDown, Moon, Zap, Check, X, Flame, TrendingUp, Award, Coffee, Sun, Sunset, Edit3, Trash2, Play, Pause, RotateCcw, Settings, Sparkles, ArrowRight, RefreshCw, Timer, Trophy, Scale, BookOpen, Droplets, Brain, Clock, AlertCircle, Wallet, Grid, LayoutGrid, Briefcase, Activity, Camera, Search, MoreHorizontal, GripVertical, Star, Heart, Lightbulb, Copy, Users, Footprints, Smartphone, Watch } from 'lucide-react';
 import { FOOD_DATABASE, FOOD_CATEGORIES } from '../data/foodDatabase';
 import { EXERCISE_DATABASE, EQUIPMENT_TYPES, SET_TYPES, getExerciseById, getExercisesByMuscle, getAllExercises } from '../data/exerciseDatabase';
@@ -1319,19 +1320,20 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
 
   if (!isOpen) return null;
 
-  return (
+  // Use createPortal to render Modal at document body level
+  // This fixes visibility issues when Modal is inside a container with overflow:hidden
+  return ReactDOM.createPortal(
     <div
       className="fixed z-[9999] flex items-center justify-center"
-      style={{ top: '-100px', left: '-100px', right: '-100px', bottom: '-100px' }}
+      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
       onClick={onClose}
     >
       <div
-        className="absolute backdrop-blur-sm bg-black/20"
-        style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+        className="absolute inset-0 backdrop-blur-sm bg-black/50"
       />
       <div
         className="relative bg-zinc-900 rounded-2xl flex flex-col shadow-2xl border border-white/10 mx-4"
-        style={{ maxHeight: 'calc(100vh - 120px)', width: '100%', maxWidth: '380px', marginBottom: '60px' }}
+        style={{ maxHeight: 'calc(100vh - 120px)', width: '100%', maxWidth: '380px' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header fijo */}
@@ -1352,7 +1354,8 @@ const Modal = ({ isOpen, onClose, title, children, footer }) => {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -3551,10 +3554,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                           <div className="flex gap-2 justify-center mt-2">
                             {routines.length > 3 && (
                               <button
-                                onClick={() => {
-                                  console.log('Ver todas clicked, showTemplateModal will be set to true');
-                                  setShowTemplateModal(true);
-                                }}
+                                onClick={() => setShowTemplateModal(true)}
                                 className="px-4 py-2 text-violet-400 text-sm hover:text-violet-300 inline-flex items-center gap-1"
                               >
                                 Ver todas ({routines.length}) <ArrowRight className="w-3 h-3" />
