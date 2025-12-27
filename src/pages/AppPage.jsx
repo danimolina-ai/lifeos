@@ -658,12 +658,12 @@ const DEFAULT_ROUTINES = [
     name: 'Push Day',
     folder: 'Push Pull Legs',
     exercises: [
-      { exerciseId: 'bench_press', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
-      { exerciseId: 'ohp', targetSets: 3, targetReps: '8-10', restSeconds: 120 },
-      { exerciseId: 'db_incline', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
-      { exerciseId: 'lateral_raise', targetSets: 4, targetReps: '12-15', restSeconds: 60 },
-      { exerciseId: 'tricep_pushdown', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
-      { exerciseId: 'overhead_tricep', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'bench_press', name: 'Press Banca', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
+      { exerciseId: 'ohp', name: 'Press Militar', targetSets: 3, targetReps: '8-10', restSeconds: 120 },
+      { exerciseId: 'db_incline', name: 'Press Inclinado Mancuernas', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
+      { exerciseId: 'lateral_raise', name: 'Elevaciones Laterales', targetSets: 4, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'tricep_pushdown', name: 'Extensión Tríceps Polea', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'overhead_tricep', name: 'Extensión Tríceps Overhead', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
     ]
   },
   {
@@ -671,12 +671,12 @@ const DEFAULT_ROUTINES = [
     name: 'Pull Day',
     folder: 'Push Pull Legs',
     exercises: [
-      { exerciseId: 'deadlift', targetSets: 4, targetReps: '5-6', restSeconds: 240 },
-      { exerciseId: 'barbell_row', targetSets: 4, targetReps: '8-10', restSeconds: 120 },
-      { exerciseId: 'lat_pulldown', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
-      { exerciseId: 'face_pull', targetSets: 3, targetReps: '15-20', restSeconds: 60 },
-      { exerciseId: 'barbell_curl', targetSets: 3, targetReps: '10-12', restSeconds: 60 },
-      { exerciseId: 'hammer_curl', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'deadlift', name: 'Peso Muerto', targetSets: 4, targetReps: '5-6', restSeconds: 240 },
+      { exerciseId: 'barbell_row', name: 'Remo con Barra', targetSets: 4, targetReps: '8-10', restSeconds: 120 },
+      { exerciseId: 'lat_pulldown', name: 'Jalón al Pecho', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
+      { exerciseId: 'face_pull', name: 'Face Pull', targetSets: 3, targetReps: '15-20', restSeconds: 60 },
+      { exerciseId: 'barbell_curl', name: 'Curl con Barra', targetSets: 3, targetReps: '10-12', restSeconds: 60 },
+      { exerciseId: 'hammer_curl', name: 'Curl Martillo', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
     ]
   },
   {
@@ -684,12 +684,12 @@ const DEFAULT_ROUTINES = [
     name: 'Leg Day',
     folder: 'Push Pull Legs',
     exercises: [
-      { exerciseId: 'squat', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
-      { exerciseId: 'rdl', targetSets: 3, targetReps: '10-12', restSeconds: 120 },
-      { exerciseId: 'leg_press', targetSets: 3, targetReps: '12-15', restSeconds: 90 },
-      { exerciseId: 'leg_curl', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
-      { exerciseId: 'leg_extension', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
-      { exerciseId: 'calf_raise', targetSets: 4, targetReps: '15-20', restSeconds: 45 },
+      { exerciseId: 'squat', name: 'Sentadilla', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
+      { exerciseId: 'rdl', name: 'Peso Muerto Rumano', targetSets: 3, targetReps: '10-12', restSeconds: 120 },
+      { exerciseId: 'leg_press', name: 'Prensa', targetSets: 3, targetReps: '12-15', restSeconds: 90 },
+      { exerciseId: 'leg_curl', name: 'Curl Femoral', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'leg_extension', name: 'Extensión Cuádriceps', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'calf_raise', name: 'Elevación de Gemelos', targetSets: 4, targetReps: '15-20', restSeconds: 45 },
     ]
   },
   {
@@ -697,12 +697,12 @@ const DEFAULT_ROUTINES = [
     name: 'Upper Body',
     folder: 'Upper Lower',
     exercises: [
-      { exerciseId: 'bench_press', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
-      { exerciseId: 'barbell_row', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
-      { exerciseId: 'ohp', targetSets: 3, targetReps: '8-10', restSeconds: 120 },
-      { exerciseId: 'lat_pulldown', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
-      { exerciseId: 'db_curl', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
-      { exerciseId: 'tricep_pushdown', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'bench_press', name: 'Press Banca', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
+      { exerciseId: 'barbell_row', name: 'Remo con Barra', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
+      { exerciseId: 'ohp', name: 'Press Militar', targetSets: 3, targetReps: '8-10', restSeconds: 120 },
+      { exerciseId: 'lat_pulldown', name: 'Jalón al Pecho', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
+      { exerciseId: 'db_curl', name: 'Curl Mancuernas', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'tricep_pushdown', name: 'Extensión Tríceps Polea', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
     ]
   },
   {
@@ -710,11 +710,11 @@ const DEFAULT_ROUTINES = [
     name: 'Lower Body',
     folder: 'Upper Lower',
     exercises: [
-      { exerciseId: 'squat', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
-      { exerciseId: 'rdl', targetSets: 4, targetReps: '8-10', restSeconds: 120 },
-      { exerciseId: 'leg_press', targetSets: 3, targetReps: '12-15', restSeconds: 90 },
-      { exerciseId: 'leg_curl', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
-      { exerciseId: 'calf_raise', targetSets: 4, targetReps: '15-20', restSeconds: 45 },
+      { exerciseId: 'squat', name: 'Sentadilla', targetSets: 4, targetReps: '6-8', restSeconds: 180 },
+      { exerciseId: 'rdl', name: 'Peso Muerto Rumano', targetSets: 4, targetReps: '8-10', restSeconds: 120 },
+      { exerciseId: 'leg_press', name: 'Prensa', targetSets: 3, targetReps: '12-15', restSeconds: 90 },
+      { exerciseId: 'leg_curl', name: 'Curl Femoral', targetSets: 3, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'calf_raise', name: 'Elevación de Gemelos', targetSets: 4, targetReps: '15-20', restSeconds: 45 },
     ]
   },
   {
@@ -722,12 +722,12 @@ const DEFAULT_ROUTINES = [
     name: 'Full Body',
     folder: 'Full Body',
     exercises: [
-      { exerciseId: 'squat', targetSets: 3, targetReps: '8-10', restSeconds: 150 },
-      { exerciseId: 'bench_press', targetSets: 3, targetReps: '8-10', restSeconds: 150 },
-      { exerciseId: 'barbell_row', targetSets: 3, targetReps: '8-10', restSeconds: 120 },
-      { exerciseId: 'ohp', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
-      { exerciseId: 'rdl', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
-      { exerciseId: 'db_curl', targetSets: 2, targetReps: '12-15', restSeconds: 60 },
+      { exerciseId: 'squat', name: 'Sentadilla', targetSets: 3, targetReps: '8-10', restSeconds: 150 },
+      { exerciseId: 'bench_press', name: 'Press Banca', targetSets: 3, targetReps: '8-10', restSeconds: 150 },
+      { exerciseId: 'barbell_row', name: 'Remo con Barra', targetSets: 3, targetReps: '8-10', restSeconds: 120 },
+      { exerciseId: 'ohp', name: 'Press Militar', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
+      { exerciseId: 'rdl', name: 'Peso Muerto Rumano', targetSets: 3, targetReps: '10-12', restSeconds: 90 },
+      { exerciseId: 'db_curl', name: 'Curl Mancuernas', targetSets: 2, targetReps: '12-15', restSeconds: 60 },
     ]
   }
 ];
@@ -1753,6 +1753,11 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
 
   // Template selection modal state
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateModalView, setTemplateModalView] = useState('select'); // 'select' or 'create'
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateExercises, setNewTemplateExercises] = useState([]);
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [exerciseSearch, setExerciseSearch] = useState('');
 
   const today = getToday();
   const isViewingToday = viewDate === today;
@@ -3560,72 +3565,226 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                 Ver todas ({routines.length}) <ArrowRight className="w-3 h-3" />
                               </button>
                             )}
-                            {/* Inline modal with portal for debugging */}
+                            {/* Inline modal with portal */}
                             {showTemplateModal && ReactDOM.createPortal(
                               <div
                                 className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70"
-                                onClick={() => setShowTemplateModal(false)}
+                                onClick={() => { setShowTemplateModal(false); setTemplateModalView('select'); }}
                               >
                                 <div
-                                  className="bg-zinc-900 rounded-2xl p-6 m-4 max-w-sm w-full border border-white/20"
+                                  className="bg-zinc-900 rounded-2xl m-4 max-w-md w-full border border-white/20 max-h-[85vh] flex flex-col"
                                   onClick={e => e.stopPropagation()}
                                 >
-                                  <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-bold">Seleccionar Plantilla</h3>
-                                    <button onClick={() => setShowTemplateModal(false)} className="p-1 hover:bg-white/10 rounded">
+                                  {/* Header */}
+                                  <div className="flex justify-between items-center p-4 border-b border-white/10">
+                                    <div className="flex items-center gap-2">
+                                      {templateModalView === 'create' && (
+                                        <button onClick={() => setTemplateModalView('select')} className="p-1 hover:bg-white/10 rounded">
+                                          <ChevronLeft className="w-5 h-5" />
+                                        </button>
+                                      )}
+                                      <h3 className="text-lg font-bold">
+                                        {templateModalView === 'select' ? 'Seleccionar Plantilla' : 'Crear Plantilla'}
+                                      </h3>
+                                    </div>
+                                    <button onClick={() => { setShowTemplateModal(false); setTemplateModalView('select'); }} className="p-1 hover:bg-white/10 rounded">
                                       <X className="w-5 h-5" />
                                     </button>
                                   </div>
-                                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                                    {routines.map(r => (
-                                      <button
-                                        key={r.id}
-                                        onClick={() => {
-                                          const newWorkout = {
-                                            id: `workout-${Date.now()}`,
-                                            day_id: viewDate,
-                                            name: r.name,
-                                            started_at: new Date().toISOString(),
-                                            is_completed: false,
-                                            templateId: r.id,
-                                            exercises: (r.exercises || []).map(e => ({
-                                              id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                                              exerciseId: e.exerciseId || e.id,
-                                              name: e.name || 'Ejercicio',
-                                              targetSets: e.sets || e.targetSets || 3,
-                                              targetReps: e.reps || e.targetReps || '8',
-                                              restSeconds: e.restSeconds || 90,
-                                              notes: e.notes || '',
-                                              sets: Array.from({ length: e.sets || e.targetSets || 3 }, () => ({
-                                                id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                                                weight: null, reps: null, rpe: null, setType: 'normal', completed: false
-                                              }))
-                                            }))
-                                          };
-                                          setData(prev => ({ ...prev, workouts: [...(prev.workouts || []), newWorkout] }));
-                                          setShowTemplateModal(false);
-                                          // Navigate to workout area for full tracking experience
-                                          setScreen('workout');
-                                          showToast(`${r.name} iniciado - ¡A entrenar! 💪`);
-                                        }}
-                                        className="w-full p-3 bg-white/10 hover:bg-violet-500/30 rounded-xl text-left flex items-center gap-3"
-                                      >
-                                        <Dumbbell className="w-5 h-5 text-violet-400" />
-                                        <div className="flex-1">
-                                          <p className="font-medium">{r.name}</p>
-                                          <p className="text-xs text-white/50">{r.exercises?.length || 0} ejercicios</p>
+
+                                  {/* Content */}
+                                  <div className="flex-1 overflow-y-auto p-4">
+                                    {templateModalView === 'select' ? (
+                                      <>
+                                        {/* Routine list */}
+                                        <div className="space-y-2">
+                                          {routines.map(r => (
+                                            <button
+                                              key={r.id}
+                                              onClick={() => {
+                                                const newWorkout = {
+                                                  id: `workout-${Date.now()}`,
+                                                  day_id: viewDate,
+                                                  name: r.name,
+                                                  started_at: new Date().toISOString(),
+                                                  is_completed: false,
+                                                  templateId: r.id,
+                                                  exercises: (r.exercises || []).map(e => ({
+                                                    id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                                                    exerciseId: e.exerciseId || e.id,
+                                                    name: e.name || 'Ejercicio',
+                                                    targetSets: e.sets || e.targetSets || 3,
+                                                    targetReps: e.reps || e.targetReps || '8',
+                                                    restSeconds: e.restSeconds || 90,
+                                                    notes: e.notes || '',
+                                                    sets: Array.from({ length: e.sets || e.targetSets || 3 }, () => ({
+                                                      id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                                                      weight: null, reps: null, rpe: null, setType: 'normal', completed: false
+                                                    }))
+                                                  }))
+                                                };
+                                                setData(prev => ({ ...prev, workouts: [...(prev.workouts || []), newWorkout] }));
+                                                setShowTemplateModal(false);
+                                                setScreen('workout');
+                                                showToast(`${r.name} iniciado - ¡A entrenar! 💪`);
+                                              }}
+                                              className="w-full p-3 bg-white/10 hover:bg-violet-500/30 rounded-xl text-left flex items-center gap-3"
+                                            >
+                                              <Dumbbell className="w-5 h-5 text-violet-400" />
+                                              <div className="flex-1">
+                                                <p className="font-medium">{r.name}</p>
+                                                <p className="text-xs text-white/50">{r.exercises?.length || 0} ejercicios</p>
+                                              </div>
+                                              <ArrowRight className="w-4 h-4 text-white/30" />
+                                            </button>
+                                          ))}
                                         </div>
-                                        <ArrowRight className="w-4 h-4 text-white/30" />
-                                      </button>
-                                    ))}
+                                      </>
+                                    ) : (
+                                      <>
+                                        {/* Create template form */}
+                                        {!showExercisePicker ? (
+                                          <div className="space-y-4">
+                                            {/* Template name */}
+                                            <div>
+                                              <label className="text-sm text-white/60 mb-1 block">Nombre de la plantilla</label>
+                                              <input
+                                                type="text"
+                                                value={newTemplateName}
+                                                onChange={e => setNewTemplateName(e.target.value)}
+                                                placeholder="Ej: Push Day, Leg Day..."
+                                                className="w-full px-4 py-3 bg-white/10 rounded-xl border border-white/10 focus:border-violet-500 focus:outline-none"
+                                              />
+                                            </div>
+
+                                            {/* Selected exercises */}
+                                            <div>
+                                              <label className="text-sm text-white/60 mb-2 block">Ejercicios ({newTemplateExercises.length})</label>
+                                              {newTemplateExercises.length > 0 ? (
+                                                <div className="space-y-2">
+                                                  {newTemplateExercises.map((ex, idx) => (
+                                                    <div key={idx} className="flex items-center gap-2 p-2 bg-white/5 rounded-lg">
+                                                      <span className="text-xs text-white/40">{idx + 1}</span>
+                                                      <span className="flex-1 text-sm">{ex.name}</span>
+                                                      <span className="text-xs text-white/40">{ex.targetSets}x{ex.targetReps}</span>
+                                                      <button
+                                                        onClick={() => setNewTemplateExercises(prev => prev.filter((_, i) => i !== idx))}
+                                                        className="p-1 hover:bg-red-500/20 rounded text-red-400"
+                                                      >
+                                                        <X className="w-4 h-4" />
+                                                      </button>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <p className="text-white/40 text-sm">Añade ejercicios a tu plantilla</p>
+                                              )}
+                                              <button
+                                                onClick={() => setShowExercisePicker(true)}
+                                                className="mt-2 w-full py-2 border border-dashed border-white/20 rounded-xl text-white/60 hover:border-violet-500 hover:text-violet-400 flex items-center justify-center gap-2"
+                                              >
+                                                <Plus className="w-4 h-4" /> Añadir ejercicio
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          /* Exercise picker */
+                                          <div className="space-y-3">
+                                            <input
+                                              type="text"
+                                              value={exerciseSearch}
+                                              onChange={e => setExerciseSearch(e.target.value)}
+                                              placeholder="Buscar ejercicio..."
+                                              className="w-full px-4 py-3 bg-white/10 rounded-xl border border-white/10 focus:border-violet-500 focus:outline-none"
+                                              autoFocus
+                                            />
+                                            <div className="max-h-60 overflow-y-auto space-y-1">
+                                              {getAllExercises()
+                                                .filter(ex => ex.name.toLowerCase().includes(exerciseSearch.toLowerCase()))
+                                                .slice(0, 20)
+                                                .map(ex => (
+                                                  <button
+                                                    key={ex.id}
+                                                    onClick={() => {
+                                                      setNewTemplateExercises(prev => [...prev, {
+                                                        exerciseId: ex.id,
+                                                        name: ex.name,
+                                                        targetSets: 3,
+                                                        targetReps: '8-12',
+                                                        restSeconds: 90
+                                                      }]);
+                                                      setShowExercisePicker(false);
+                                                      setExerciseSearch('');
+                                                    }}
+                                                    className="w-full p-2 text-left hover:bg-violet-500/20 rounded-lg flex items-center gap-2"
+                                                  >
+                                                    <span className="text-lg">{ex.muscleEmoji}</span>
+                                                    <span className="flex-1">{ex.name}</span>
+                                                  </button>
+                                                ))}
+                                            </div>
+                                            <button
+                                              onClick={() => { setShowExercisePicker(false); setExerciseSearch(''); }}
+                                              className="w-full py-2 text-white/50 hover:text-white"
+                                            >
+                                              Cancelar
+                                            </button>
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
                                   </div>
-                                  <div className="border-t border-white/10 mt-4 pt-4 space-y-2">
-                                    <button
-                                      onClick={() => { setShowTemplateModal(false); setScreen('workout'); }}
-                                      className="w-full py-3 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold flex items-center justify-center gap-2"
-                                    >
-                                      <Plus className="w-5 h-5" /> Crear nueva plantilla
-                                    </button>
+
+                                  {/* Footer */}
+                                  <div className="p-4 border-t border-white/10">
+                                    {templateModalView === 'select' ? (
+                                      <button
+                                        onClick={() => {
+                                          setTemplateModalView('create');
+                                          setNewTemplateName('');
+                                          setNewTemplateExercises([]);
+                                        }}
+                                        className="w-full py-3 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold flex items-center justify-center gap-2"
+                                      >
+                                        <Plus className="w-5 h-5" /> Crear nueva plantilla
+                                      </button>
+                                    ) : !showExercisePicker && (
+                                      <button
+                                        onClick={() => {
+                                          if (!newTemplateName.trim()) {
+                                            showToast('Añade un nombre a la plantilla', 'info');
+                                            return;
+                                          }
+                                          if (newTemplateExercises.length === 0) {
+                                            showToast('Añade al menos un ejercicio', 'info');
+                                            return;
+                                          }
+                                          // Save the new template
+                                          const newRoutine = {
+                                            id: `routine-${Date.now()}`,
+                                            name: newTemplateName.trim(),
+                                            exercises: newTemplateExercises,
+                                            createdAt: new Date().toISOString()
+                                          };
+                                          setData(prev => ({
+                                            ...prev,
+                                            workoutRoutines: [...(prev.workoutRoutines || []), newRoutine]
+                                          }));
+                                          showToast(`Plantilla "${newTemplateName}" creada 🎉`);
+                                          setShowTemplateModal(false);
+                                          setTemplateModalView('select');
+                                          setNewTemplateName('');
+                                          setNewTemplateExercises([]);
+                                        }}
+                                        disabled={!newTemplateName.trim() || newTemplateExercises.length === 0}
+                                        className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${newTemplateName.trim() && newTemplateExercises.length > 0
+                                            ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                                            : 'bg-white/10 text-white/40'
+                                          }`}
+                                      >
+                                        <Check className="w-5 h-5" /> Guardar plantilla
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>,
