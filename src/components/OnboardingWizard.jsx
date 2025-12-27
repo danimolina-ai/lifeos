@@ -385,13 +385,11 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
         const firstHabit = selectedFirstHabit ? {
             id: `habit_${Date.now()}`,
             name: selectedFirstHabit.name,
-            emoji: selectedFirstHabit.emoji,
-            category: selectedFirstHabit.category,
-            frequency: selectedFirstHabit.frequency,
-            color: selectedFirstHabit.color,
+            icon: selectedFirstHabit.emoji, // Use icon field like the rest of the app
+            category: selectedFirstHabit.category?.toLowerCase() || 'health',
+            frequency: selectedFirstHabit.frequency || 'daily',
+            customDays: [0, 1, 2, 3, 4, 5, 6], // All days
             createdAt: today,
-            streak: 0,
-            completedDates: [],
             isActive: true
         } : null
 
