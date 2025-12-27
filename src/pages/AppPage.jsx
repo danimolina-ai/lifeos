@@ -3560,6 +3560,72 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                                 Ver todas ({routines.length}) <ArrowRight className="w-3 h-3" />
                               </button>
                             )}
+                            {/* Inline modal with portal for debugging */}
+                            {showTemplateModal && ReactDOM.createPortal(
+                              <div
+                                className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70"
+                                onClick={() => setShowTemplateModal(false)}
+                              >
+                                <div
+                                  className="bg-zinc-900 rounded-2xl p-6 m-4 max-w-sm w-full border border-white/20"
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-bold">Seleccionar Plantilla</h3>
+                                    <button onClick={() => setShowTemplateModal(false)} className="p-1 hover:bg-white/10 rounded">
+                                      <X className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                                    {routines.map(r => (
+                                      <button
+                                        key={r.id}
+                                        onClick={() => {
+                                          const newWorkout = {
+                                            id: `workout-${Date.now()}`,
+                                            day_id: viewDate,
+                                            name: r.name,
+                                            started_at: new Date().toISOString(),
+                                            is_completed: false,
+                                            templateId: r.id,
+                                            exercises: (r.exercises || []).map(e => ({
+                                              id: `ex-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                                              exerciseId: e.exerciseId || e.id,
+                                              name: e.name || 'Ejercicio',
+                                              targetSets: e.sets || e.targetSets || 3,
+                                              targetReps: e.reps || e.targetReps || '8',
+                                              restSeconds: e.restSeconds || 90,
+                                              notes: e.notes || '',
+                                              sets: Array.from({ length: e.sets || e.targetSets || 3 }, () => ({
+                                                id: `set-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                                                weight: null, reps: null, rpe: null, setType: 'normal', completed: false
+                                              }))
+                                            }))
+                                          };
+                                          setData(prev => ({ ...prev, workouts: [...(prev.workouts || []), newWorkout] }));
+                                          setShowTemplateModal(false);
+                                          showToast(`${r.name} iniciado 💪`);
+                                        }}
+                                        className="w-full p-3 bg-white/10 hover:bg-violet-500/30 rounded-xl text-left flex items-center gap-3"
+                                      >
+                                        <Dumbbell className="w-5 h-5 text-violet-400" />
+                                        <div>
+                                          <p className="font-medium">{r.name}</p>
+                                          <p className="text-xs text-white/50">{r.exercises?.length || 0} ejercicios</p>
+                                        </div>
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <button
+                                    onClick={() => { setShowTemplateModal(false); setScreen('workout'); }}
+                                    className="w-full mt-4 py-3 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold"
+                                  >
+                                    Crear nueva plantilla
+                                  </button>
+                                </div>
+                              </div>,
+                              document.body
+                            )}
                             <button
                               onClick={() => {
                                 const newWorkout = {
