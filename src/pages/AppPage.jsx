@@ -15221,40 +15221,29 @@ const ControlScreen = ({ data, setData, showToast }) => {
 // FINANCES SCREEN
 // ============================================================================
 const FinancesScreen = ({ data, setData, showToast }) => {
-  const [view, setView] = useState('home'); // home, add, history, stats
+  const [view, setView] = useState('home'); // home, budgets, savings, history
   const [showAdd, setShowAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [transactionType, setTransactionType] = useState('expense'); // expense, income
+  const [showAddSaving, setShowAddSaving] = useState(false);
+  const [transactionType, setTransactionType] = useState('expense');
   const [newTransaction, setNewTransaction] = useState({
     amount: '',
     category: '',
     description: '',
     date: getToday()
   });
-
-  const [localSettings, setLocalSettings] = useState({
-    monthlyBudget: data.finances?.monthlyBudget || 0,
-    currency: data.finances?.currency || '€',
-    weekStartsMonday: data.finances?.weekStartsMonday ?? true
+  const [newSavingGoal, setNewSavingGoal] = useState({
+    name: '',
+    targetAmount: '',
+    targetDate: '',
+    icon: '🎯'
   });
-
-  const saveSettings = () => {
-    setData(prev => ({
-      ...prev,
-      finances: {
-        ...prev.finances,
-        monthlyBudget: localSettings.monthlyBudget,
-        currency: localSettings.currency,
-        weekStartsMonday: localSettings.weekStartsMonday
-      }
-    }));
-    setShowSettings(false);
-    showToast('Configuración guardada');
-  };
 
   const today = getToday();
   const transactions = data.finances?.transactions || [];
+  const categoryBudgets = data.finances?.categoryBudgets || {};
+  const savingsGoals = data.finances?.savingsGoals || [];
+  const currency = data.finances?.currency || '€';
 
   // Categories
   const expenseCategories = [
@@ -15273,44 +15262,79 @@ const FinancesScreen = ({ data, setData, showToast }) => {
     { id: 'freelance', name: 'Freelance', icon: '💻', color: 'blue' },
     { id: 'investment', name: 'Inversiones', icon: '📈', color: 'green' },
     { id: 'gift', name: 'Regalo', icon: '🎁', color: 'pink' },
-    { id: 'refund', name: 'Reembolso', icon: '↩️', color: 'yellow' },
     { id: 'other', name: 'Otros', icon: '💰', color: 'gray' },
   ];
 
-  const categories = transactionType === 'expense' ? expenseCategories : incomeCategories;
+  const savingIcons = ['🎯', '✈️', '🏠', '🚗', '💻', '📚', '💍', '🎓', '🏖️', '💰'];
 
   // Calculations
   const thisMonth = today.substring(0, 7);
+  const lastMonth = getDateOffset(today, -30).substring(0, 7);
   const monthTransactions = transactions.filter(t => t.date?.startsWith(thisMonth));
+  const lastMonthTransactions = transactions.filter(t => t.date?.startsWith(lastMonth));
   const monthExpenses = monthTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const monthIncome = monthTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const lastMonthExpenses = lastMonthTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const monthBalance = monthIncome - monthExpenses;
-
-  const todayTransactions = transactions.filter(t => t.date === today);
-  const todayExpenses = todayTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-
-  // Budget
-  const monthlyBudget = data.finances?.monthlyBudget || 0;
-  const budgetUsed = monthlyBudget > 0 ? Math.round((monthExpenses / monthlyBudget) * 100) : 0;
 
   // By category this month
   const expensesByCategory = expenseCategories.map(cat => ({
     ...cat,
-    total: monthTransactions.filter(t => t.type === 'expense' && t.category === cat.id).reduce((s, t) => s + t.amount, 0)
-  })).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
+    total: monthTransactions.filter(t => t.type === 'expense' && t.category === cat.id).reduce((s, t) => s + t.amount, 0),
+    budget: categoryBudgets[cat.id] || 0
+  })).filter(c => c.total > 0 || c.budget > 0).sort((a, b) => b.total - a.total);
 
-  // Last 7 days spending
-  const last7Days = Array.from({ length: 7 }, (_, i) => getDateOffset(today, -i));
-  const dailySpending = last7Days.map(d =>
-    transactions.filter(t => t.date === d && t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-  ).reverse();
+  // Insights
+  const getInsights = () => {
+    const insights = [];
 
+    // Compare to last month
+    if (lastMonthExpenses > 0) {
+      const diff = ((monthExpenses - lastMonthExpenses) / lastMonthExpenses * 100).toFixed(0);
+      if (diff > 20) {
+        insights.push({ type: 'warning', icon: '📈', text: `Gastas ${diff}% más que el mes pasado` });
+      } else if (diff < -10) {
+        insights.push({ type: 'success', icon: '🎉', text: `¡Gastas ${Math.abs(diff)}% menos que el mes pasado!` });
+      }
+    }
+
+    // Top expense category
+    if (expensesByCategory.length > 0) {
+      const top = expensesByCategory[0];
+      insights.push({ type: 'info', icon: top.icon, text: `Mayor gasto: ${top.name} (${top.total.toLocaleString()}${currency})` });
+    }
+
+    // Budget alerts
+    expensesByCategory.forEach(cat => {
+      if (cat.budget > 0) {
+        const pct = (cat.total / cat.budget) * 100;
+        if (pct >= 100) {
+          insights.push({ type: 'error', icon: '🚨', text: `¡Superaste el presupuesto de ${cat.name}!` });
+        } else if (pct >= 80) {
+          insights.push({ type: 'warning', icon: '⚠️', text: `${cat.name}: ${pct.toFixed(0)}% del presupuesto usado` });
+        }
+      }
+    });
+
+    // Savings progress
+    savingsGoals.forEach(goal => {
+      const pct = (goal.currentAmount / goal.targetAmount) * 100;
+      if (pct >= 100) {
+        insights.push({ type: 'success', icon: '🏆', text: `¡Meta "${goal.name}" completada!` });
+      }
+    });
+
+    return insights.slice(0, 3);
+  };
+
+  const insights = getInsights();
+
+  // Actions
   const saveTransaction = () => {
     if (!newTransaction.amount || !newTransaction.category) {
       showToast('Completa los campos');
       return;
     }
-
     const transaction = {
       id: generateId(),
       type: transactionType,
@@ -15319,7 +15343,6 @@ const FinancesScreen = ({ data, setData, showToast }) => {
       description: newTransaction.description,
       date: newTransaction.date
     };
-
     setData(prev => ({
       ...prev,
       finances: {
@@ -15327,7 +15350,6 @@ const FinancesScreen = ({ data, setData, showToast }) => {
         transactions: [...(prev.finances?.transactions || []), transaction]
       }
     }));
-
     setShowAdd(false);
     setNewTransaction({ amount: '', category: '', description: '', date: getToday() });
     showToast(transactionType === 'expense' ? 'Gasto registrado' : 'Ingreso registrado');
@@ -15344,13 +15366,85 @@ const FinancesScreen = ({ data, setData, showToast }) => {
     showToast('Eliminado');
   };
 
+  const updateCategoryBudget = (categoryId, amount) => {
+    setData(prev => ({
+      ...prev,
+      finances: {
+        ...prev.finances,
+        categoryBudgets: {
+          ...prev.finances?.categoryBudgets,
+          [categoryId]: parseFloat(amount) || 0
+        }
+      }
+    }));
+  };
+
+  const addSavingGoal = () => {
+    if (!newSavingGoal.name || !newSavingGoal.targetAmount) {
+      showToast('Completa nombre y cantidad');
+      return;
+    }
+    const goal = {
+      id: generateId(),
+      name: newSavingGoal.name,
+      icon: newSavingGoal.icon,
+      targetAmount: parseFloat(newSavingGoal.targetAmount),
+      targetDate: newSavingGoal.targetDate,
+      currentAmount: 0,
+      createdAt: new Date().toISOString()
+    };
+    setData(prev => ({
+      ...prev,
+      finances: {
+        ...prev.finances,
+        savingsGoals: [...(prev.finances?.savingsGoals || []), goal]
+      }
+    }));
+    setShowAddSaving(false);
+    setNewSavingGoal({ name: '', targetAmount: '', targetDate: '', icon: '🎯' });
+    showToast('Meta de ahorro creada');
+  };
+
+  const addToSaving = (goalId, amount) => {
+    setData(prev => ({
+      ...prev,
+      finances: {
+        ...prev.finances,
+        savingsGoals: prev.finances.savingsGoals.map(g =>
+          g.id === goalId ? { ...g, currentAmount: (g.currentAmount || 0) + parseFloat(amount) } : g
+        )
+      }
+    }));
+    showToast(`+${amount}${currency} añadido`);
+  };
+
+  const deleteSavingGoal = (goalId) => {
+    setData(prev => ({
+      ...prev,
+      finances: {
+        ...prev.finances,
+        savingsGoals: prev.finances.savingsGoals.filter(g => g.id !== goalId)
+      }
+    }));
+    showToast('Meta eliminada');
+  };
+
   const getCategoryInfo = (categoryId, type) => {
     const cats = type === 'expense' ? expenseCategories : incomeCategories;
     return cats.find(c => c.id === categoryId) || { icon: '💰', name: categoryId, color: 'gray' };
   };
 
+  // Navigation tabs
+  const tabs = [
+    { id: 'home', label: 'Resumen', icon: '📊' },
+    { id: 'budgets', label: 'Presupuestos', icon: '🎯' },
+    { id: 'savings', label: 'Ahorros', icon: '🐷' },
+    { id: 'history', label: 'Historial', icon: '📋' },
+  ];
+
   return (
     <div className="space-y-4 pb-24">
+      {/* Header */}
       <AnimatedMount>
         <div className="flex items-center justify-between">
           <div>
@@ -15358,9 +15452,6 @@ const FinancesScreen = ({ data, setData, showToast }) => {
             <p className="text-white/50 text-sm">{new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowHelp(true)} className="p-3 hover:bg-white/10 rounded-full">
-              <BookOpen className="w-5 h-5 text-white/50" />
-            </button>
             <button onClick={() => setShowSettings(true)} className="p-3 hover:bg-white/10 rounded-full">
               <Settings className="w-5 h-5 text-white/50" />
             </button>
@@ -15371,127 +15462,334 @@ const FinancesScreen = ({ data, setData, showToast }) => {
         </div>
       </AnimatedMount>
 
-      {/* Monthly Overview */}
-      <AnimatedMount delay={50}>
-        <Card className={`bg-gradient-to-r ${monthBalance >= 0 ? 'from-emerald-500/20 to-green-500/20 border-emerald-500/30' : 'from-red-500/20 to-orange-500/20 border-red-500/30'}`}>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-xs text-white/50">Balance del mes</p>
-              <p className={`text-3xl font-bold ${monthBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {monthBalance >= 0 ? '+' : ''}{monthBalance.toLocaleString()}€
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-emerald-400">+{monthIncome.toLocaleString()}€</p>
-              <p className="text-sm text-red-400">-{monthExpenses.toLocaleString()}€</p>
-            </div>
-          </div>
-
-          {monthlyBudget > 0 && (
-            <div>
-              <div className="flex justify-between text-xs text-white/50 mb-1">
-                <span>Presupuesto</span>
-                <span>{monthExpenses.toLocaleString()}€ / {monthlyBudget.toLocaleString()}€</span>
-              </div>
-              <ProgressBar
-                value={budgetUsed}
-                max={100}
-                color={budgetUsed > 100 ? 'bg-red-500' : budgetUsed > 80 ? 'bg-yellow-500' : 'bg-emerald-500'}
-              />
-            </div>
-          )}
-        </Card>
-      </AnimatedMount>
-
-      {/* Quick Stats */}
-      <AnimatedMount delay={75}>
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="text-center">
-            <p className="text-2xl font-bold text-red-400">-{todayExpenses.toLocaleString()}€</p>
-            <p className="text-xs text-white/40">Hoy</p>
-          </Card>
-          <Card className="text-center">
-            <p className="text-2xl font-bold">{transactions.length}</p>
-            <p className="text-xs text-white/40">Transacciones</p>
-          </Card>
+      {/* Tabs */}
+      <AnimatedMount delay={25}>
+        <div className="flex gap-1 bg-white/5 p-1 rounded-xl">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setView(tab.id)}
+              className={`flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1 ${view === tab.id ? 'bg-violet-500' : 'hover:bg-white/10'}`}
+            >
+              <span>{tab.icon}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          ))}
         </div>
       </AnimatedMount>
 
-      {/* Spending Chart */}
-      {dailySpending.some(d => d > 0) && (
-        <AnimatedMount delay={100}>
-          <Card>
-            <p className="font-medium mb-2">Gastos últimos 7 días</p>
-            <MiniChart data={dailySpending} color="#EF4444" height={60} />
-          </Card>
-        </AnimatedMount>
+      {/* HOME VIEW */}
+      {view === 'home' && (
+        <>
+          {/* Insights */}
+          {insights.length > 0 && (
+            <AnimatedMount delay={50}>
+              <div className="space-y-2">
+                {insights.map((insight, i) => (
+                  <div key={i} className={`p-3 rounded-xl flex items-center gap-3 ${insight.type === 'success' ? 'bg-emerald-500/20 border border-emerald-500/30' :
+                      insight.type === 'warning' ? 'bg-amber-500/20 border border-amber-500/30' :
+                        insight.type === 'error' ? 'bg-red-500/20 border border-red-500/30' :
+                          'bg-white/5'
+                    }`}>
+                    <span className="text-xl">{insight.icon}</span>
+                    <p className="text-sm flex-1">{insight.text}</p>
+                  </div>
+                ))}
+              </div>
+            </AnimatedMount>
+          )}
+
+          {/* Monthly Overview */}
+          <AnimatedMount delay={75}>
+            <Card className={`bg-gradient-to-r ${monthBalance >= 0 ? 'from-emerald-500/20 to-green-500/20 border-emerald-500/30' : 'from-red-500/20 to-orange-500/20 border-red-500/30'}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs text-white/50">Balance del mes</p>
+                  <p className={`text-3xl font-bold ${monthBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {monthBalance >= 0 ? '+' : ''}{monthBalance.toLocaleString()}{currency}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-emerald-400">+{monthIncome.toLocaleString()}{currency}</p>
+                  <p className="text-sm text-red-400">-{monthExpenses.toLocaleString()}{currency}</p>
+                </div>
+              </div>
+            </Card>
+          </AnimatedMount>
+
+          {/* Top Categories */}
+          {expensesByCategory.length > 0 && (
+            <AnimatedMount delay={100}>
+              <Card>
+                <p className="font-medium mb-3">Gastos por categoría</p>
+                <div className="space-y-3">
+                  {expensesByCategory.slice(0, 4).map(cat => {
+                    const pct = cat.budget > 0 ? (cat.total / cat.budget) * 100 : 0;
+                    return (
+                      <div key={cat.id} className="flex items-center gap-3">
+                        <span className="text-lg">{cat.icon}</span>
+                        <div className="flex-1">
+                          <div className="flex justify-between text-sm mb-1">
+                            <span>{cat.name}</span>
+                            <span className="font-medium">
+                              {cat.total.toLocaleString()}{currency}
+                              {cat.budget > 0 && <span className="text-white/40"> / {cat.budget}{currency}</span>}
+                            </span>
+                          </div>
+                          {cat.budget > 0 && (
+                            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${Math.min(pct, 100)}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button onClick={() => setView('budgets')} className="w-full mt-3 py-2 text-sm text-violet-400 hover:bg-white/5 rounded-lg">
+                  Ver presupuestos →
+                </button>
+              </Card>
+            </AnimatedMount>
+          )}
+
+          {/* Savings Goals Preview */}
+          {savingsGoals.length > 0 && (
+            <AnimatedMount delay={125}>
+              <Card>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-medium">Metas de ahorro</p>
+                  <button onClick={() => setView('savings')} className="text-sm text-violet-400">Ver todas</button>
+                </div>
+                <div className="space-y-2">
+                  {savingsGoals.slice(0, 2).map(goal => {
+                    const pct = (goal.currentAmount / goal.targetAmount) * 100;
+                    return (
+                      <div key={goal.id} className="p-3 bg-white/5 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span>{goal.icon}</span>
+                            <span className="font-medium text-sm">{goal.name}</span>
+                          </div>
+                          <span className="text-xs text-white/50">{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full bg-violet-500 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+                        </div>
+                        <p className="text-xs text-white/40 mt-1">
+                          {goal.currentAmount?.toLocaleString() || 0}{currency} / {goal.targetAmount.toLocaleString()}{currency}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            </AnimatedMount>
+          )}
+
+          {/* Recent Transactions */}
+          <AnimatedMount delay={150}>
+            <Section title="RECIENTES" icon={Clock} iconColor="text-blue-400">
+              {transactions.length > 0 ? (
+                <div className="space-y-2">
+                  {transactions.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5).map(t => {
+                    const cat = getCategoryInfo(t.category, t.type);
+                    return (
+                      <div key={t.id} className="flex items-center gap-3 p-3 bg-white/5 rounded-xl">
+                        <span className="text-xl">{cat.icon}</span>
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{t.description || cat.name}</p>
+                          <p className="text-xs text-white/40">{formatShortDate(t.date)}</p>
+                        </div>
+                        <p className={`font-bold ${t.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()}{currency}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  <button onClick={() => setView('history')} className="w-full py-2 text-sm text-violet-400 hover:bg-white/5 rounded-lg">
+                    Ver historial completo →
+                  </button>
+                </div>
+              ) : (
+                <EmptyState icon={Wallet} title="Sin transacciones" description="Registra tu primer gasto o ingreso" />
+              )}
+            </Section>
+          </AnimatedMount>
+        </>
       )}
 
-      {/* By Category */}
-      {expensesByCategory.length > 0 && (
-        <AnimatedMount delay={125}>
+      {/* BUDGETS VIEW */}
+      {view === 'budgets' && (
+        <AnimatedMount delay={50}>
           <Card>
-            <p className="font-medium mb-3">Por categoría</p>
-            <div className="space-y-2">
-              {expensesByCategory.slice(0, 5).map(cat => (
-                <div key={cat.id} className="flex items-center gap-3">
-                  <span className="text-lg">{cat.icon}</span>
-                  <div className="flex-1">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>{cat.name}</span>
-                      <span className="font-medium">{cat.total.toLocaleString()}€</span>
+            <p className="font-bold mb-1">Presupuestos por categoría</p>
+            <p className="text-xs text-white/50 mb-4">Define límites mensuales para cada tipo de gasto</p>
+            <div className="space-y-4">
+              {expenseCategories.map(cat => {
+                const spent = monthTransactions.filter(t => t.type === 'expense' && t.category === cat.id).reduce((s, t) => s + t.amount, 0);
+                const budget = categoryBudgets[cat.id] || 0;
+                const pct = budget > 0 ? (spent / budget) * 100 : 0;
+                return (
+                  <div key={cat.id} className="p-3 bg-white/5 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{cat.icon}</span>
+                        <span className="font-medium">{cat.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={budget || ''}
+                          onChange={(e) => updateCategoryBudget(cat.id, e.target.value)}
+                          placeholder="0"
+                          className="w-20 bg-white/10 rounded-lg px-2 py-1 text-right text-sm outline-none"
+                        />
+                        <span className="text-sm text-white/50">{currency}</span>
+                      </div>
                     </div>
-                    <ProgressBar
-                      value={cat.total}
-                      max={monthExpenses}
-                      color={`bg-${cat.color}-500`}
-                      height="h-1"
-                    />
+                    {budget > 0 && (
+                      <>
+                        <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-1">
+                          <div
+                            className={`h-full rounded-full ${pct > 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-white/40">
+                          {spent.toLocaleString()}{currency} gastado ({pct.toFixed(0)}%)
+                          {pct > 100 && <span className="text-red-400 ml-1">⚠️ Superado</span>}
+                        </p>
+                      </>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
         </AnimatedMount>
       )}
 
-      {/* Recent Transactions */}
-      <AnimatedMount delay={150}>
-        <Section title="RECIENTES" icon={Clock} iconColor="text-blue-400">
+      {/* SAVINGS VIEW */}
+      {view === 'savings' && (
+        <>
+          <AnimatedMount delay={50}>
+            <div className="flex justify-between items-center">
+              <p className="font-bold">Metas de ahorro</p>
+              <button onClick={() => setShowAddSaving(true)} className="bg-violet-500 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+                <Plus className="w-4 h-4" /> Nueva meta
+              </button>
+            </div>
+          </AnimatedMount>
+
+          {savingsGoals.length > 0 ? (
+            <div className="space-y-3">
+              {savingsGoals.map((goal, i) => {
+                const pct = (goal.currentAmount / goal.targetAmount) * 100;
+                const remaining = goal.targetAmount - (goal.currentAmount || 0);
+                return (
+                  <AnimatedMount key={goal.id} delay={75 + i * 25}>
+                    <Card className={pct >= 100 ? 'border-emerald-500/50 bg-emerald-500/10' : ''}>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-3xl">{goal.icon}</span>
+                          <div>
+                            <p className="font-bold">{goal.name}</p>
+                            <p className="text-xs text-white/50">
+                              {goal.targetDate ? `Meta: ${formatShortDate(goal.targetDate)}` : 'Sin fecha límite'}
+                            </p>
+                          </div>
+                        </div>
+                        <button onClick={() => deleteSavingGoal(goal.id)} className="p-2 hover:bg-white/10 rounded-lg">
+                          <X className="w-4 h-4 text-white/40" />
+                        </button>
+                      </div>
+
+                      <div className="mb-3">
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>{(goal.currentAmount || 0).toLocaleString()}{currency}</span>
+                          <span className="text-white/50">{goal.targetAmount.toLocaleString()}{currency}</span>
+                        </div>
+                        <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-violet-500'}`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-white/40 mt-1">
+                          {pct >= 100 ? '🎉 ¡Meta completada!' : `Faltan ${remaining.toLocaleString()}${currency}`}
+                        </p>
+                      </div>
+
+                      {pct < 100 && (
+                        <div className="flex gap-2">
+                          {[10, 50, 100].map(amt => (
+                            <button
+                              key={amt}
+                              onClick={() => addToSaving(goal.id, amt)}
+                              className="flex-1 py-2 bg-white/10 hover:bg-violet-500/50 rounded-lg text-sm font-medium"
+                            >
+                              +{amt}{currency}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  </AnimatedMount>
+                );
+              })}
+            </div>
+          ) : (
+            <AnimatedMount delay={75}>
+              <Card className="text-center py-8">
+                <span className="text-5xl mb-3 block">🐷</span>
+                <p className="font-bold mb-1">Sin metas de ahorro</p>
+                <p className="text-sm text-white/50 mb-4">Crea objetivos para motivarte a ahorrar</p>
+                <button onClick={() => setShowAddSaving(true)} className="bg-violet-500 px-6 py-3 rounded-xl font-medium">
+                  Crear primera meta
+                </button>
+              </Card>
+            </AnimatedMount>
+          )}
+        </>
+      )}
+
+      {/* HISTORY VIEW */}
+      {view === 'history' && (
+        <AnimatedMount delay={50}>
           {transactions.length > 0 ? (
             <div className="space-y-2">
-              {transactions
-                .sort((a, b) => b.date.localeCompare(a.date))
-                .slice(0, 10)
-                .map(t => {
-                  const cat = getCategoryInfo(t.category, t.type);
-                  return (
-                    <SwipeableItem key={t.id} onDelete={() => deleteTransaction(t.id)}>
-                      <Card className="py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xl">{cat.icon}</span>
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{t.description || cat.name}</p>
-                            <p className="text-xs text-white/40">{formatShortDate(t.date)}</p>
-                          </div>
-                          <p className={`font-bold ${t.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()}€
-                          </p>
+              {transactions.sort((a, b) => b.date.localeCompare(a.date)).map(t => {
+                const cat = getCategoryInfo(t.category, t.type);
+                return (
+                  <SwipeableItem key={t.id} onDelete={() => deleteTransaction(t.id)}>
+                    <Card className="py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{cat.icon}</span>
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{t.description || cat.name}</p>
+                          <p className="text-xs text-white/40">{formatShortDate(t.date)}</p>
                         </div>
-                      </Card>
-                    </SwipeableItem>
-                  );
-                })}
+                        <p className={`font-bold ${t.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString()}{currency}
+                        </p>
+                      </div>
+                    </Card>
+                  </SwipeableItem>
+                );
+              })}
             </div>
           ) : (
             <EmptyState icon={Wallet} title="Sin transacciones" description="Registra tu primer gasto o ingreso" />
           )}
-        </Section>
-      </AnimatedMount>
+        </AnimatedMount>
+      )}
 
       {/* Add Transaction Modal */}
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Nueva transacción">
-        {/* Type Toggle */}
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setTransactionType('expense')}
@@ -15507,9 +15805,8 @@ const FinancesScreen = ({ data, setData, showToast }) => {
           </button>
         </div>
 
-        {/* Amount */}
         <div className="mb-4">
-          <label className="text-sm text-white/60 mb-1 block">Cantidad (€)</label>
+          <label className="text-sm text-white/60 mb-1 block">Cantidad ({currency})</label>
           <input
             type="number"
             value={newTransaction.amount}
@@ -15519,11 +15816,10 @@ const FinancesScreen = ({ data, setData, showToast }) => {
           />
         </div>
 
-        {/* Category */}
         <div className="mb-4">
           <label className="text-sm text-white/60 mb-2 block">Categoría</label>
           <div className="grid grid-cols-4 gap-2">
-            {categories.map(cat => (
+            {(transactionType === 'expense' ? expenseCategories : incomeCategories).map(cat => (
               <button
                 key={cat.id}
                 onClick={() => setNewTransaction(t => ({ ...t, category: cat.id }))}
@@ -15536,7 +15832,6 @@ const FinancesScreen = ({ data, setData, showToast }) => {
           </div>
         </div>
 
-        {/* Description */}
         <div className="mb-4">
           <label className="text-sm text-white/60 mb-1 block">Descripción (opcional)</label>
           <input
@@ -15548,7 +15843,6 @@ const FinancesScreen = ({ data, setData, showToast }) => {
           />
         </div>
 
-        {/* Date */}
         <div className="mb-6">
           <label className="text-sm text-white/60 mb-1 block">Fecha</label>
           <input
@@ -15567,75 +15861,76 @@ const FinancesScreen = ({ data, setData, showToast }) => {
         </button>
       </Modal>
 
-      {/* Settings Modal */}
-      <Modal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        title="Configuración Finanzas"
-        footer={
-          <button onClick={saveSettings} className="w-full py-4 bg-violet-500 rounded-xl font-medium">
-            Guardar cambios
-          </button>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm text-white/60 mb-2 block">Presupuesto mensual</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={localSettings.monthlyBudget}
-                onChange={(e) => setLocalSettings(p => ({ ...p, monthlyBudget: parseFloat(e.target.value) || 0 }))}
-                className="flex-1 bg-white/10 rounded-xl p-4 outline-none text-xl font-bold text-center"
-                placeholder="0"
-              />
-              <span className="text-xl">{localSettings.currency}</span>
-            </div>
+      {/* Add Saving Goal Modal */}
+      <Modal isOpen={showAddSaving} onClose={() => setShowAddSaving(false)} title="Nueva meta de ahorro">
+        <div className="mb-4">
+          <label className="text-sm text-white/60 mb-2 block">Icono</label>
+          <div className="flex gap-2 flex-wrap">
+            {savingIcons.map(icon => (
+              <button
+                key={icon}
+                onClick={() => setNewSavingGoal(g => ({ ...g, icon }))}
+                className={`w-12 h-12 rounded-xl text-2xl ${newSavingGoal.icon === icon ? 'bg-violet-500' : 'bg-white/10'}`}
+              >
+                {icon}
+              </button>
+            ))}
           </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="text-sm text-white/60 mb-1 block">Nombre de la meta</label>
+          <input
+            type="text"
+            value={newSavingGoal.name}
+            onChange={(e) => setNewSavingGoal(g => ({ ...g, name: e.target.value }))}
+            placeholder="Ej: Vacaciones 2025"
+            className="w-full bg-white/10 rounded-xl p-3 outline-none"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="text-sm text-white/60 mb-1 block">Cantidad objetivo ({currency})</label>
+          <input
+            type="number"
+            value={newSavingGoal.targetAmount}
+            onChange={(e) => setNewSavingGoal(g => ({ ...g, targetAmount: e.target.value }))}
+            placeholder="1000"
+            className="w-full bg-white/10 rounded-xl p-4 text-xl font-bold text-center outline-none"
+          />
+        </div>
+
+        <div className="mb-6">
+          <label className="text-sm text-white/60 mb-1 block">Fecha límite (opcional)</label>
+          <input
+            type="date"
+            value={newSavingGoal.targetDate}
+            onChange={(e) => setNewSavingGoal(g => ({ ...g, targetDate: e.target.value }))}
+            className="w-full bg-white/10 rounded-xl p-3 outline-none"
+          />
+        </div>
+
+        <button onClick={addSavingGoal} className="w-full py-4 bg-violet-500 rounded-xl font-bold">
+          Crear meta de ahorro
+        </button>
+      </Modal>
+
+      {/* Settings Modal */}
+      <Modal isOpen={showSettings} onClose={() => setShowSettings(false)} title="Configuración">
+        <div className="space-y-4">
           <div>
             <label className="text-sm text-white/60 mb-2 block">Moneda</label>
             <div className="flex gap-2">
               {['€', '$', '£', '¥'].map(c => (
                 <button
                   key={c}
-                  onClick={() => setLocalSettings(p => ({ ...p, currency: c }))}
-                  className={`flex-1 py-3 rounded-xl text-xl ${localSettings.currency === c ? 'bg-violet-500' : 'bg-white/10'}`}
+                  onClick={() => setData(prev => ({ ...prev, finances: { ...prev.finances, currency: c } }))}
+                  className={`flex-1 py-3 rounded-xl text-xl ${currency === c ? 'bg-violet-500' : 'bg-white/10'}`}
                 >
                   {c}
                 </button>
               ))}
             </div>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Help Modal */}
-      <Modal isOpen={showHelp} onClose={() => setShowHelp(false)} title="Guía de Finanzas">
-        <div className="space-y-4 text-sm">
-          <div className="p-3 bg-emerald-500/10 rounded-xl">
-            <p className="font-bold text-emerald-400 mb-1">💰 Control básico</p>
-            <p className="text-white/60">Registra cada gasto e ingreso. La consciencia es el primer paso al control financiero.</p>
-          </div>
-          <div className="p-3 bg-white/5 rounded-xl">
-            <p className="font-bold text-amber-400 mb-1">📊 Presupuesto mensual</p>
-            <p className="text-white/60">Define cuánto puedes gastar al mes. La barra de progreso te avisa si vas por encima.</p>
-          </div>
-          <div className="p-3 bg-white/5 rounded-xl">
-            <p className="font-bold text-blue-400 mb-1">📁 Categorías</p>
-            <p className="text-white/60">Usa categorías para ver dónde va tu dinero. Identifica patrones de gasto.</p>
-          </div>
-          <div className="p-3 bg-white/5 rounded-xl">
-            <p className="font-bold text-red-400 mb-1">🔴 Gastos vs 🟢 Ingresos</p>
-            <p className="text-white/60">Registra ambos para ver tu balance real. El objetivo: que los ingresos superen gastos.</p>
-          </div>
-          <div className="p-3 bg-violet-500/20 rounded-xl">
-            <p className="font-bold mb-1">💡 Reglas útiles</p>
-            <p className="text-white/60">
-              • <strong>50/30/20</strong>: 50% necesidades, 30% deseos, 20% ahorro<br />
-              • Registra gastos al momento, no después<br />
-              • Revisa semanalmente dónde va tu dinero<br />
-              • Los pequeños gastos diarios suman mucho
-            </p>
           </div>
         </div>
       </Modal>
