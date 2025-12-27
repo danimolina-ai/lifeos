@@ -198,14 +198,30 @@ let saveTimeout = null
 let pendingSaveData = null // Track pending data for immediate save on page hide
 
 const saveToSupabase = async (key, value, immediate = false) => {
-    if (!currentUser) {
-        console.log('[Storage] No user, skipping save')
-        return
-    }
     if (key !== 'lifeOS_v58') return
 
+    // Get fresh session - don't rely on cached currentUser
+    let userId = currentUser?.id
+    if (!userId) {
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            userId = session?.user?.id
+            if (session?.user) {
+                currentUser = session.user // Update cached user
+                console.log('[Storage] 🔄 Got fresh session for user:', userId)
+            }
+        } catch (e) {
+            console.error('[Storage] Failed to get session:', e)
+        }
+    }
+
+    if (!userId) {
+        console.log('[Storage] ⚠️ No user session, skipping save')
+        return
+    }
+
     // Store pending data for emergency save
-    pendingSaveData = { key, value }
+    pendingSaveData = { key, value, userId }
 
     // Clear previous timeout
     if (saveTimeout) clearTimeout(saveTimeout)
@@ -214,27 +230,27 @@ const saveToSupabase = async (key, value, immediate = false) => {
 
     // If immediate save requested (e.g., page hiding), save now
     if (immediate) {
-        await doSave(key, value)
+        await doSave(key, value, userId)
         return
     }
 
     // Debounce: wait 500ms before saving (reduced from 2s for mobile)
     saveTimeout = setTimeout(async () => {
-        await doSave(key, value)
+        await doSave(key, value, userId)
         pendingSaveData = null
     }, 500)
 }
 
 // Actual save function
-const doSave = async (key, value) => {
+const doSave = async (key, value, userId) => {
     try {
-        console.log('[Storage] 📤 Saving to Supabase...')
+        console.log('[Storage] 📤 Saving to Supabase for user:', userId)
         const parsedValue = JSON.parse(value)
 
         const { error } = await supabase
             .from('user_data')
             .upsert({
-                user_id: currentUser.id,
+                user_id: userId,
                 key: key,
                 data: parsedValue,
                 updated_at: new Date().toISOString()
