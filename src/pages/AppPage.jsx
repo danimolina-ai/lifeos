@@ -6,6 +6,7 @@ import { FOOD_DATABASE, FOOD_CATEGORIES } from '../data/foodDatabase';
 import { EXERCISE_DATABASE, EQUIPMENT_TYPES, SET_TYPES, getExerciseById, getExercisesByMuscle, getAllExercises } from '../data/exerciseDatabase';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { syncData } from '../lib/storage';
 import { LogOut, User } from 'lucide-react';
 import OnboardingWizard from '../components/OnboardingWizard';
 import InteractiveTour from '../components/InteractiveTour';
@@ -903,7 +904,13 @@ const useLocalStorage = (key, init) => {
   const setValue = (v) => {
     const toStore = typeof v === 'function' ? v(val) : v;
     setVal(toStore);
-    localStorage.setItem(key, JSON.stringify(toStore));
+    const jsonValue = JSON.stringify(toStore);
+    localStorage.setItem(key, jsonValue);
+
+    // Directly trigger sync for lifeOS data (bypass interception issues)
+    if (key === 'lifeOS_v58' && syncData) {
+      syncData(key, jsonValue);
+    }
   };
 
   return [val, setValue];

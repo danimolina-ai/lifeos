@@ -377,4 +377,4 @@ localStorage.setItem = function (key, value) {
 // Initialize on load
 init()
 
-export { currentUser, init, getSyncStatus, forceSync }
+export { currentUser, init, getSyncStatus, forceSync, saveToSupabase as syncData }
