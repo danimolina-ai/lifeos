@@ -9,6 +9,7 @@ const features = [
         title: 'Nutrición',
         tagline: 'Control total sobre lo que comes',
         color: 'from-orange-500 to-amber-500',
+        screenshot: '/screenshots/nutrition.png',
         description: 'Trackea cada comida, entiende tus macros, y toma el control de tu alimentación sin volverte loco.',
         features: [
             { title: 'Base de datos 500+ alimentos', desc: 'Busca y añade alimentos en segundos con datos nutricionales precisos' },
@@ -25,6 +26,7 @@ const features = [
         title: 'Entrenamiento',
         tagline: 'Rutinas que generan resultados',
         color: 'from-red-500 to-rose-500',
+        screenshot: '/screenshots/dashboard-real.png',
         description: 'Diseña rutinas personalizadas, trackea tu progreso, y rompe tus records personales.',
         features: [
             { title: '400+ ejercicios', desc: 'Base de datos completa con instrucciones y músculos trabajados' },
@@ -41,6 +43,7 @@ const features = [
         title: 'Hábitos',
         tagline: 'Automatiza tu excelencia',
         color: 'from-emerald-500 to-green-500',
+        screenshot: '/screenshots/dashboard.png',
         description: 'Construye identidad a través de pequeñas acciones diarias. El sistema de hábitos más adictivo que probarás.',
         features: [
             { title: 'Streaks y rachas', desc: 'Mantén la motivación con rachas visuales' },
@@ -57,6 +60,7 @@ const features = [
         title: 'Trabajo',
         tagline: 'Productividad de élite',
         color: 'from-violet-500 to-purple-500',
+        screenshot: '/screenshots/dashboard-nutrition.png',
         description: 'Gestiona proyectos, prioriza con la matriz de Eisenhower, y domina el Deep Work.',
         features: [
             { title: 'Matriz de Eisenhower', desc: 'Prioriza tareas por urgencia e importancia' },
@@ -73,6 +77,7 @@ const features = [
         title: 'Personal',
         tagline: 'Tu vida fuera del trabajo',
         color: 'from-cyan-500 to-teal-500',
+        screenshot: null,
         description: 'Gestiona todo lo que no es trabajo: hogar, trámites, salud, aprendizaje...',
         features: [
             { title: 'Categorías personalizadas', desc: 'Organiza por áreas de tu vida' },
@@ -89,6 +94,7 @@ const features = [
         title: 'Finanzas',
         tagline: 'Claridad sobre tu dinero',
         color: 'from-yellow-500 to-orange-500',
+        screenshot: null,
         description: 'Trackea ingresos y gastos, establece presupuestos, y toma el control de tu economía.',
         features: [
             { title: 'Tracking de transacciones', desc: 'Registra cada ingreso y gasto' },
@@ -105,6 +111,7 @@ const features = [
         title: 'Consciencia',
         tagline: 'Claridad mental',
         color: 'from-indigo-500 to-blue-500',
+        screenshot: '/screenshots/consciousness.png',
         description: 'Journaling, gratitud, y reflexión. El espacio para conectar contigo mismo.',
         features: [
             { title: 'Journaling diario', desc: 'Escribe y procesa tus pensamientos' },
@@ -121,6 +128,7 @@ const features = [
         title: 'Relaciones',
         tagline: 'Conexiones significativas',
         color: 'from-pink-500 to-rose-500',
+        screenshot: null,
         description: 'Un CRM personal para mantener vivas las relaciones que importan.',
         features: [
             { title: 'CRM personal', desc: 'Gestiona todos tus contactos importantes' },
@@ -158,15 +166,23 @@ export default function FeaturesPage() {
                             key={feature.id}
                             className={`flex flex-col ${index % 2 === 1 ? 'md:flex-row-reverse' : 'md:flex-row'} gap-12 items-center`}
                         >
-                            {/* Image/Mockup placeholder */}
+                            {/* Image/Mockup */}
                             <div className="flex-1 w-full">
-                                <div className={`aspect-video rounded-3xl bg-gradient-to-br ${feature.color} p-1`}>
-                                    <div className="w-full h-full rounded-[1.4rem] bg-zinc-900 flex items-center justify-center">
-                                        <div className="text-center">
-                                            <div className="text-6xl mb-4">{feature.emoji}</div>
-                                            <p className="text-white/40">Screenshot {feature.title}</p>
+                                <div className={`aspect-video rounded-3xl bg-gradient-to-br ${feature.color} p-1 overflow-hidden`}>
+                                    {feature.screenshot ? (
+                                        <img
+                                            src={feature.screenshot}
+                                            alt={`${feature.title} screenshot`}
+                                            className="w-full h-full rounded-[1.4rem] object-cover object-top"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full rounded-[1.4rem] bg-zinc-900 flex items-center justify-center">
+                                            <div className="text-center">
+                                                <div className="text-6xl mb-4">{feature.emoji}</div>
+                                                <p className="text-white/40">Coming soon</p>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
 
