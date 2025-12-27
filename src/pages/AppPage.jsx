@@ -1865,7 +1865,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
 
   // Filter data for current view date
   const dayMeals = data.meals.filter(m => m.day_id === viewDate);
-  const dayWorkout = data.workouts.find(w => w.day_id === viewDate);
+  const dayWorkout = (data.workouts || []).find(w => w.day_id === viewDate);
   const dayTasks = data.tasks.filter(t => t.day_id === viewDate);
   const dayJournal = data.journals?.find(j => j.date === viewDate);
 
@@ -2498,7 +2498,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                 const dayHabitsData = data.habitLogs?.filter(l => l.date === date) || [];
                 const dayMealsData = data.meals.filter(m => m.day_id === date);
                 const dayTasksData = data.tasks.filter(t => t.day_id === date);
-                const dayWorkoutData = data.workouts.find(w => w.day_id === date);
+                const dayWorkoutData = (data.workouts || []).find(w => w.day_id === date);
                 const score = calculateDayScore(dayInfo, dayHabitsData, dayMealsData, dayTasksData, dayWorkoutData, data.user.goals);
 
                 const hasWorkout = !!dayWorkoutData;
@@ -2557,7 +2557,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                 const dayHabitsData = data.habitLogs?.filter(l => l.date === date) || [];
                 const dayMealsData = data.meals.filter(m => m.day_id === date);
                 const dayTasksData = data.tasks.filter(t => t.day_id === date);
-                const dayWorkoutData = data.workouts.find(w => w.day_id === date);
+                const dayWorkoutData = (data.workouts || []).find(w => w.day_id === date);
                 return {
                   date,
                   isPastOrToday,
@@ -2613,7 +2613,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                 const dayHabitsData = data.habitLogs?.filter(l => l.date === date) || [];
                 const dayMealsData = data.meals.filter(m => m.day_id === date);
                 const dayTasksData = data.tasks.filter(t => t.day_id === date);
-                const dayWorkoutData = data.workouts.find(w => w.day_id === date);
+                const dayWorkoutData = (data.workouts || []).find(w => w.day_id === date);
                 return calculateDayScore(dayInfo, dayHabitsData, dayMealsData, dayTasksData, dayWorkoutData, data.user.goals);
               });
               const prevWeekAvg = prevWeekStats.length > 0 ? Math.round(prevWeekStats.reduce((s, d) => s + d, 0) / 7) : 0;
@@ -2640,7 +2640,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                     const dayHabitsData = data.habitLogs?.filter(l => l.date === dateStr) || [];
                     const dayMealsData = data.meals.filter(m => m.day_id === dateStr);
                     const dayTasksData = data.tasks.filter(t => t.day_id === dateStr);
-                    const dayWorkoutData = data.workouts.find(wk => wk.day_id === dateStr);
+                    const dayWorkoutData = (data.workouts || []).find(wk => wk.day_id === dateStr);
                     const score = calculateDayScore(dayInfo, dayHabitsData, dayMealsData, dayTasksData, dayWorkoutData, data.user.goals);
                     if (score > 0) {
                       weekTotal += score;
@@ -3890,7 +3890,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                         area: 'workout',
                         target: 70,
                         progress: () => {
-                          const todayWorkout = data.workouts.find(w => w.day_id === viewDate);
+                          const todayWorkout = (data.workouts || []).find(w => w.day_id === viewDate);
                           if (!todayWorkout) return 0;
                           if (todayWorkout.is_completed) return 100;
                           const completedSets = todayWorkout.exercises?.reduce((sum, ex) =>
@@ -6382,7 +6382,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                     const dayHabitsData = data.habitLogs?.filter(l => l.date === dateStr) || [];
                     const dayMealsData = data.meals.filter(m => m.day_id === dateStr);
                     const dayTasksData = data.tasks.filter(t => t.day_id === dateStr);
-                    const dayWorkoutData = data.workouts.find(w => w.day_id === dateStr);
+                    const dayWorkoutData = (data.workouts || []).find(w => w.day_id === dateStr);
                     const score = calculateDayScore(dayInfo, dayHabitsData, dayMealsData, dayTasksData, dayWorkoutData, data.user.goals);
                     days.push({ day: d, date: dateStr, score, hasData: score > 0 });
                   } else {
@@ -12278,7 +12278,7 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
 
   // Get last workout data for exercise
   const getLastPerformance = (exerciseId) => {
-    for (const w of data.workouts.filter(w => w.is_completed).sort((a, b) => b.day_id.localeCompare(a.day_id))) {
+    for (const w of (data.workouts || []).filter(w => w.is_completed).sort((a, b) => b.day_id.localeCompare(a.day_id))) {
       const ex = w.exercises?.find(e => e.exerciseId === exerciseId);
       if (ex?.sets.some(s => s.completed)) {
         return { date: w.day_id, sets: ex.sets.filter(s => s.completed) };
@@ -12798,7 +12798,7 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
       .slice(0, 5);
 
 
-    const weekWorkouts = data.workouts.filter(w => {
+    const weekWorkouts = (data.workouts || []).filter(w => {
       const weekDates = getWeekDates();
       return weekDates.includes(w.day_id) && w.is_completed;
     }).length;
@@ -16980,7 +16980,7 @@ const WeeklyScreen = ({ data }) => {
     const dayData = data.days[date];
     const dayMeals = data.meals.filter(m => m.day_id === date);
     const dayTasks = data.tasks.filter(t => t.day_id === date);
-    const dayWorkout = data.workouts.find(w => w.day_id === date);
+    const dayWorkout = (data.workouts || []).find(w => w.day_id === date);
     const dayHabitLogs = data.habitLogs?.filter(l => l.date === date) || [];
 
     return {
@@ -17192,7 +17192,7 @@ const StatsScreen = ({ data, setScreen }) => {
   // General
   const dayData = data.days[today];
   const todayMeals = data.meals.filter(m => m.day_id === today);
-  const todayWorkout = data.workouts.find(w => w.day_id === today);
+  const todayWorkout = (data.workouts || []).find(w => w.day_id === today);
   const todayTasks = data.tasks.filter(t => t.day_id === today);
   const todayHabitLogs = data.habitLogs?.filter(l => l.date === today) || [];
   const dayScore = calculateDayScore(dayData, todayHabitLogs, todayMeals, todayTasks, todayWorkout, data.user.goals);
@@ -17202,7 +17202,7 @@ const StatsScreen = ({ data, setScreen }) => {
   const last30Days = Array.from({ length: 30 }, (_, i) => getDateOffset(today, -i));
 
   // Workout stats
-  const completedWorkouts = data.workouts.filter(w => w.is_completed);
+  const completedWorkouts = (data.workouts || []).filter(w => w.is_completed);
   const workoutsThisWeek = completedWorkouts.filter(w => last7Days.includes(w.day_id)).length;
   const workoutsThisMonth = completedWorkouts.filter(w => last30Days.includes(w.day_id)).length;
   const totalVolume = completedWorkouts.reduce((sum, w) => {
@@ -17251,7 +17251,7 @@ const StatsScreen = ({ data, setScreen }) => {
   const scoreHistory = last7Days.map(d => {
     const dd = data.days[d];
     const dm = data.meals.filter(m => m.day_id === d);
-    const dw = data.workouts.find(w => w.day_id === d);
+    const dw = (data.workouts || []).find(w => w.day_id === d);
     const dt = data.tasks.filter(t => t.day_id === d);
     const dh = data.habitLogs?.filter(l => l.date === d) || [];
     return calculateDayScore(dd, dh, dm, dt, dw, data.user.goals);
