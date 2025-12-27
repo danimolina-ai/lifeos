@@ -12917,6 +12917,14 @@ const WorkoutScreen = ({ data, setData, showToast }) => {
                 </button>
               ))}
             </div>
+            {routines.length > 3 && (
+              <button
+                onClick={() => setView('routines')}
+                className="w-full mt-2 py-2 text-sm text-violet-400 hover:text-violet-300 flex items-center justify-center gap-1"
+              >
+                Ver todas ({routines.length} rutinas) <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
           </Card>
         </AnimatedMount>
 
