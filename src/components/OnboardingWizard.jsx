@@ -246,8 +246,27 @@ const SAMPLE_MANTRAS = [
     'El momento es ahora'
 ]
 
+// TIER 2.3: First Win - Quick habits to create immediately
+const FIRST_WIN_HABITS = [
+    { id: 'water', name: 'Beber 8 vasos de agua', emoji: '💧', category: 'Health', frequency: 'daily', color: 'blue' },
+    { id: 'walk', name: 'Caminar 10 minutos', emoji: '🚶', category: 'Fitness', frequency: 'daily', color: 'green' },
+    { id: 'gratitude', name: 'Escribir 3 gratitudes', emoji: '🙏', category: 'Mindfulness', frequency: 'daily', color: 'purple' },
+    { id: 'read', name: 'Leer 10 páginas', emoji: '📚', category: 'Learning', frequency: 'daily', color: 'amber' },
+    { id: 'stretch', name: 'Estirar 5 minutos', emoji: '🧘', category: 'Health', frequency: 'daily', color: 'pink' },
+    { id: 'sleep', name: 'Dormir antes de las 11pm', emoji: '😴', category: 'Health', frequency: 'daily', color: 'indigo' }
+]
+
+// TIER 2.5: Quick Tour steps
+const TOUR_STEPS = [
+    { emoji: '🏠', title: 'Hoy', desc: 'Tu centro de mando diario. Ve todo lo importante de un vistazo.' },
+    { emoji: '🍎', title: 'Nutrición', desc: 'Trackea comidas, macros y alcanza tus objetivos.' },
+    { emoji: '💪', title: 'Gym', desc: 'Registra entrenamientos, PRs y ve tu progreso.' },
+    { emoji: '✅', title: 'Hábitos', desc: 'Construye rutinas y mantén rachas.' },
+    { emoji: '📊', title: 'Dashboard', desc: 'Visualiza tu progreso y correlaciones.' }
+]
+
 export default function OnboardingWizard({ data, setData, onComplete }) {
-    // Steps: 0=welcome, 1=name, 2=areas, 3+=area questions, n-1=mantra, n=complete
+    // Steps: 0=welcome, 1=name, 2=areas, 3+=area questions, then mantra, firstWin, tour, complete
     const [step, setStep] = useState(0)
     const [name, setName] = useState('')
     const [selectedAreas, setSelectedAreas] = useState([])
@@ -256,6 +275,10 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
     const [currentAreaIndex, setCurrentAreaIndex] = useState(0)
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
     const [showMotivational, setShowMotivational] = useState(false)
+    // TIER 2.3: First Win state
+    const [selectedFirstHabit, setSelectedFirstHabit] = useState(null)
+    // TIER 2.5: Tour state
+    const [currentTourStep, setCurrentTourStep] = useState(0)
 
     const allAreas = Object.keys(AREAS_CONFIG)
 
@@ -272,8 +295,11 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
     }
 
     const questionSteps = getQuestionSteps()
-    const mantrasStepNumber = 3 + questionSteps.length // After welcome(0), name(1), areas(2), questions(3 to 3+n-1)
-    const totalSteps = mantrasStepNumber + 1 // Add 1 for the mantra step itself
+    // Steps: welcome(0), name(1), areas(2), questions(3 to 3+n-1), mantra, firstWin, tour
+    const mantrasStepNumber = 3 + questionSteps.length
+    const firstWinStepNumber = mantrasStepNumber + 1
+    const tourStepNumber = firstWinStepNumber + 1
+    const totalSteps = tourStepNumber + 1
 
     // Current state helpers
     const isWelcomeStep = step === 0
@@ -281,6 +307,8 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
     const isAreasStep = step === 2
     const isQuestionStep = step >= 3 && step < mantrasStepNumber
     const isMantrasStep = step === mantrasStepNumber
+    const isFirstWinStep = step === firstWinStepNumber
+    const isTourStep = step === tourStepNumber
 
     const getCurrentQuestion = () => {
         if (!isQuestionStep) return null
@@ -322,6 +350,9 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
             if (q.type === 'multi') return response && response.length > 0
             return response !== undefined
         }
+        if (isMantrasStep) return true // Mantra is optional
+        if (isFirstWinStep) return selectedFirstHabit !== null // Must select a habit
+        if (isTourStep) return true // Tour is just informational
         return true
     }
 
@@ -350,6 +381,20 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
             steps: 10000
         }
 
+        // TIER 2.3: Create first habit from selection
+        const firstHabit = selectedFirstHabit ? {
+            id: `habit_${Date.now()}`,
+            name: selectedFirstHabit.name,
+            emoji: selectedFirstHabit.emoji,
+            category: selectedFirstHabit.category,
+            frequency: selectedFirstHabit.frequency,
+            color: selectedFirstHabit.color,
+            createdAt: today,
+            streak: 0,
+            completedDates: [],
+            isActive: true
+        } : null
+
         // Save to data
         setData(prev => ({
             ...prev,
@@ -363,6 +408,7 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
                 onboardingResponses: areaResponses,
                 demoDataEnabled: false
             },
+            habits: firstHabit ? [firstHabit, ...(prev.habits || [])] : (prev.habits || []),
             days: {
                 [today]: {
                     id: today,
@@ -629,6 +675,83 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
                     </div>
                 )}
 
+                {/* TIER 2.3: First Win Step - Create first habit */}
+                {isFirstWinStep && (
+                    <div className="flex-1 flex flex-col">
+                        <div className="text-center mb-6">
+                            <div className="text-5xl mb-4">🎯</div>
+                            <h1 className="text-3xl font-bold mb-2">Tu primera victoria</h1>
+                            <p className="text-white/50">
+                                Elige un hábito simple para empezar. Lo completarás hoy mismo.
+                            </p>
+                        </div>
+
+                        <div className="grid gap-3 flex-1">
+                            {FIRST_WIN_HABITS.map(habit => (
+                                <button
+                                    key={habit.id}
+                                    onClick={() => setSelectedFirstHabit(habit)}
+                                    className={`w-full p-4 rounded-2xl text-left transition-all flex items-center gap-4 ${selectedFirstHabit?.id === habit.id
+                                        ? 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-lg scale-[1.02]'
+                                        : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                                        }`}
+                                >
+                                    <span className="text-3xl">{habit.emoji}</span>
+                                    <div>
+                                        <div className="font-medium">{habit.name}</div>
+                                        <div className="text-sm opacity-70">{habit.category}</div>
+                                    </div>
+                                    {selectedFirstHabit?.id === habit.id && (
+                                        <Check className="w-6 h-6 ml-auto" />
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+
+                        <p className="text-center text-white/30 text-sm mt-4">
+                            💡 Los hábitos pequeños construyen grandes transformaciones
+                        </p>
+                    </div>
+                )}
+
+                {/* TIER 2.5: Tour Step - Quick app intro */}
+                {isTourStep && (
+                    <div className="flex-1 flex flex-col">
+                        <div className="text-center mb-6">
+                            <div className="text-5xl mb-4">🚀</div>
+                            <h1 className="text-3xl font-bold mb-2">¡Ya casi está!</h1>
+                            <p className="text-white/50">
+                                Conoce las áreas principales de Life OS
+                            </p>
+                        </div>
+
+                        <div className="space-y-4 flex-1">
+                            {TOUR_STEPS.map((item, idx) => (
+                                <div
+                                    key={idx}
+                                    className={`p-4 rounded-2xl transition-all ${currentTourStep === idx
+                                        ? 'bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 scale-[1.02]'
+                                        : 'bg-white/5 border border-white/5'
+                                        }`}
+                                    onClick={() => setCurrentTourStep(idx)}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-2xl">{item.emoji}</span>
+                                        <div>
+                                            <div className="font-medium text-white">{item.title}</div>
+                                            <div className="text-sm text-white/60">{item.desc}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <p className="text-center text-white/30 text-sm mt-4">
+                            ✨ Explora cada área desde el menú lateral
+                        </p>
+                    </div>
+                )}
+
                 {/* Navigation */}
                 {step > 0 && (
                     <div className="flex gap-3 pt-6 mt-auto">
@@ -639,7 +762,7 @@ export default function OnboardingWizard({ data, setData, onComplete }) {
                             <ArrowLeft className="w-5 h-5" />
                         </button>
 
-                        {isMantrasStep ? (
+                        {isTourStep ? (
                             <button
                                 onClick={handleComplete}
                                 className="flex-1 py-4 bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform"
