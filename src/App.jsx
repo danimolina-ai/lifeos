@@ -135,6 +135,23 @@ function UserAvatar() {
                                 </div>
                             </button>
 
+                            {/* Tour Button */}
+                            <button
+                                onClick={() => { window.dispatchEvent(new CustomEvent('startTour')); setMenuOpen(false); }}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors text-left"
+                            >
+                                <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-white text-sm font-medium">Ver tour de la app</p>
+                                    <p className="text-white/40 text-xs">Guía interactiva de funciones</p>
+                                </div>
+                            </button>
+
+
                             {/* Demo Data Toggle */}
                             <button
                                 onClick={() => { window.dispatchEvent(new CustomEvent('toggleDemoData')); setMenuOpen(false); }}
@@ -157,6 +174,27 @@ function UserAvatar() {
                             {/* Separator */}
                             <div className="my-2 border-t border-white/5" />
 
+                            {/* Reset Data */}
+                            <button
+                                onClick={() => {
+                                    if (window.confirm('⚠️ ¿Estás seguro? Esto borrará TODOS tus datos y empezarás desde cero con el onboarding.')) {
+                                        localStorage.removeItem('lifeOS_v58');
+                                        window.location.reload();
+                                    }
+                                }}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-amber-500/10 transition-colors text-left group"
+                            >
+                                <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p className="text-amber-400 text-sm font-medium">Empezar de nuevo</p>
+                                    <p className="text-white/40 text-xs">Borrar datos y repetir onboarding</p>
+                                </div>
+                            </button>
+
                             {/* App Info */}
                             <div className="px-3 py-2">
                                 <div className="flex items-center justify-between text-xs">
@@ -167,6 +205,7 @@ function UserAvatar() {
 
                             {/* Separator */}
                             <div className="my-2 border-t border-white/5" />
+
 
                             {/* Logout */}
                             <button

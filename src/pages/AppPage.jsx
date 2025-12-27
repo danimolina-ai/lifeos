@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { LogOut, User } from 'lucide-react';
 import OnboardingWizard from '../components/OnboardingWizard';
+import InteractiveTour from '../components/InteractiveTour';
 
 
 // ============================================================================
@@ -1744,6 +1745,9 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
   const [personalShowAddTask, setPersonalShowAddTask] = useState(false);
   const [personalNewTask, setPersonalNewTask] = useState({ title: '', category: 'home', dueDate: '', priority: 'medium' });
 
+  // Notifications state - track dismissed notifications for this session
+  const [dismissedNotifications, setDismissedNotifications] = useState(new Set());
+
   const today = getToday();
   const isViewingToday = viewDate === today;
 
@@ -2402,7 +2406,85 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
         </div>
       </AnimatedMount>
 
+      {/* === NOTIFICATIONS SECTION === */}
+      {/* Insights/Correlations appear here in a dedicated area */}
+      {(() => {
+        const showCorrelations = getCorrelations.length > 0 && !dismissedNotifications.has('correlations');
+        const showInsight = getCorrelations.length === 0 && insight && !dismissedNotifications.has('insight');
+
+        if (!showCorrelations && !showInsight) return null;
+
+        return (
+          <AnimatedMount delay={50}>
+            <div className="mt-3 space-y-2">
+              {/* Correlations insights - Card format with header */}
+              {showCorrelations && (
+                <div className="bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5 border border-violet-500/20 rounded-xl p-3">
+                  {/* Header row */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-violet-400" />
+                      <span className="text-xs font-medium text-violet-300">Conexiones detectadas</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-white/30">{getCorrelations.length} insight{getCorrelations.length > 1 ? 's' : ''}</span>
+                      <button
+                        onClick={() => setDismissedNotifications(prev => new Set([...prev, 'correlations']))}
+                        className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5 text-white/40 hover:text-white/70" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* Insight messages */}
+                  <div className="space-y-2">
+                    {getCorrelations.slice(0, 3).map((corr) => (
+                      <div
+                        key={corr.id}
+                        className={`flex items-start gap-2 p-2 rounded-lg ${corr.type === 'success' ? 'bg-emerald-500/10' :
+                            corr.type === 'warning' ? 'bg-amber-500/10' : 'bg-blue-500/10'
+                          }`}
+                      >
+                        <span className="text-base flex-shrink-0">{corr.icon}</span>
+                        <p className="text-xs text-white/80">{corr.text}</p>
+                      </div>
+                    ))}
+
+                    {getCorrelations.length > 3 && (
+                      <p className="text-xs text-white/30 text-center">+{getCorrelations.length - 3} más...</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback single insight */}
+              {showInsight && (
+                <div className={`rounded-xl px-3 py-2 border ${insight.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20' :
+                  insight.type === 'warning' ? 'bg-amber-500/10 border-amber-500/20' :
+                    'bg-blue-500/10 border-blue-500/20'
+                  }`}>
+                  <div className="flex items-center gap-2">
+                    <Brain className={`w-4 h-4 flex-shrink-0 ${insight.type === 'success' ? 'text-emerald-400' :
+                      insight.type === 'warning' ? 'text-amber-400' : 'text-blue-400'
+                      }`} />
+                    <p className="text-xs text-white/80 flex-1">{insight.text}</p>
+                    <button
+                      onClick={() => setDismissedNotifications(prev => new Set([...prev, 'insight']))}
+                      className="p-1 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5 text-white/40 hover:text-white/70" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </AnimatedMount>
+        );
+      })()}
+
+
       {/* Conditional: Week View */}
+
       {viewMode === 'week' ? (
         <>
           {/* Week Days Row - Interactive Calendar */}
@@ -4789,59 +4871,8 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
             </AnimatedMount>
           )}
 
-          {/* TIER 3: Correlations / Cross-Area Insights */}
-          {getCorrelations.length > 0 && (
-            <AnimatedMount delay={175}>
-              <Card className="bg-gradient-to-br from-violet-500/5 to-fuchsia-500/5 border-violet-500/20">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-violet-400" />
-                    <span className="text-xs font-medium text-violet-300">Conexiones detectadas</span>
-                  </div>
-                  <span className="text-xs text-white/30">{getCorrelations.length} insight{getCorrelations.length > 1 ? 's' : ''}</span>
-                </div>
-                <div className="space-y-2">
-                  {getCorrelations.slice(0, 3).map((corr, idx) => (
-                    <div
-                      key={corr.id}
-                      className={`flex items-start gap-3 p-2 rounded-lg ${corr.type === 'success' ? 'bg-emerald-500/10' :
-                        corr.type === 'warning' ? 'bg-amber-500/10' :
-                          'bg-blue-500/10'
-                        }`}
-                    >
-                      <span className="text-lg flex-shrink-0">{corr.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white/80">{corr.text}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {getCorrelations.length > 3 && (
-                    <p className="text-xs text-white/30 text-center pt-1">
-                      +{getCorrelations.length - 3} más...
-                    </p>
-                  )}
-                </div>
-              </Card>
-            </AnimatedMount>
-          )}
+          {/* Insights moved to NOTIFICATIONS SECTION at top of TodayScreen */}
 
-          {/* Fallback: Single insight if no correlations */}
-          {getCorrelations.length === 0 && insight && (
-            <AnimatedMount delay={175}>
-              <Card className={`
-            ${insight.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20' : ''}
-            ${insight.type === 'warning' ? 'bg-amber-500/10 border-amber-500/20' : ''}
-            ${insight.type === 'info' ? 'bg-blue-500/10 border-blue-500/20' : ''}
-          `}>
-                <div className="flex items-center gap-3">
-                  <Brain className={`w-5 h-5 ${insight.type === 'success' ? 'text-emerald-400' :
-                    insight.type === 'warning' ? 'text-amber-400' : 'text-blue-400'
-                    }`} />
-                  <p className="text-sm">{insight.text}</p>
-                </div>
-              </Card>
-            </AnimatedMount>
-          )}
 
           {/* ==================== PERSONAL TASKS ==================== */}
           {activeAreas.includes('personal') && (() => {
@@ -22489,6 +22520,7 @@ export default function LifeOSApp() {
   const [screen, setScreen] = useState('today');
   const [toast, setToast] = useState(null);
   const [hubOpen, setHubOpen] = useState(false); // Hub menu state - must be before any conditional returns
+  const [showTour, setShowTour] = useState(false); // Interactive tour state
 
   // Listen for goToSettings event from global header
   useEffect(() => {
@@ -22496,6 +22528,23 @@ export default function LifeOSApp() {
     window.addEventListener('goToSettings', handleGoToSettings);
     return () => window.removeEventListener('goToSettings', handleGoToSettings);
   }, []);
+
+  // Listen for startTour event from profile menu
+  useEffect(() => {
+    const handleStartTour = () => setShowTour(true);
+    window.addEventListener('startTour', handleStartTour);
+    return () => window.removeEventListener('startTour', handleStartTour);
+  }, []);
+
+  // Auto-start tour after onboarding - DISABLED until tour is more complete
+  // useEffect(() => {
+  //   if (data.user?.onboardingComplete && !data.user?.tourCompleted) {
+  //     const timer = setTimeout(() => setShowTour(true), 500);
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [data.user?.onboardingComplete, data.user?.tourCompleted]);
+
+
 
   // Listen for toggleDemoData event from profile menu
   useEffect(() => {
@@ -22751,13 +22800,14 @@ export default function LifeOSApp() {
       )}
 
       {/* Bottom navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl border-t border-white/10 z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl border-t border-white/10 z-50" data-tour="navigation">
         <div className="max-w-md mx-auto flex justify-around py-2 px-4">
           <NavItem icon={Sun} label="Hoy" active={screen === 'today' || screen === 'weekly'} onClick={() => { setHubOpen(false); setScreen('today'); }} />
           <NavItem icon={Calendar} label="Calendario" active={screen === 'calendar'} onClick={() => { setHubOpen(false); setScreen('calendar'); }} />
 
           {/* Center Áreas Button */}
           <button
+            data-tour="hub"
             onClick={() => setHubOpen(!hubOpen)}
             className="flex flex-col items-center gap-0.5 px-3 py-1 relative"
           >
@@ -22786,7 +22836,31 @@ export default function LifeOSApp() {
         </div>
       </div>
 
+      {/* Interactive Tour */}
+      {showTour && (
+        <InteractiveTour
+          onComplete={() => {
+            // Mark tour as completed
+            setData(prev => ({
+              ...prev,
+              user: { ...prev.user, tourCompleted: true }
+            }));
+            setShowTour(false);
+            showToast('¡Tour completado! Explora cada área cuando quieras 🎉', 'success');
+          }}
+          onSkip={() => {
+            // Mark tour as completed even if skipped
+            setData(prev => ({
+              ...prev,
+              user: { ...prev.user, tourCompleted: true }
+            }));
+            setShowTour(false);
+          }}
+        />
+      )}
+
       {/* Animations */}
+
       <style>{`
         @keyframes slide-up {
           from { transform: translateY(100%); opacity: 0; }
