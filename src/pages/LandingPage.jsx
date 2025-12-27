@@ -391,6 +391,108 @@ export default function LandingPage() {
                 </div>
             </section>
 
+            {/* ========== PROBLEM AGITATION ========== */}
+            <section className="py-32 px-6">
+                <div className="max-w-4xl mx-auto">
+                    <div className="text-center mb-16">
+                        <p className="text-red-400 font-bold text-sm mb-4 tracking-wider">EL PROBLEMA QUE NO QUIERES VER</p>
+                        <h2 className="text-4xl md:text-5xl font-black mb-6">
+                            El <span className="text-red-400">97%</span> de las personas viven en piloto automático
+                        </h2>
+                        <p className="text-xl text-white/50 max-w-2xl mx-auto">
+                            Reaccionando a la vida en lugar de diseñarla.
+                        </p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        {[
+                            { emoji: '🍔', title: 'Nutrición descontrolada', desc: 'Comes sin saber qué. Culpa después. Promesas de "mañana empiezo".' },
+                            { emoji: '📱', title: 'Tiempo evaporado', desc: '3 horas de scroll. 0 tareas importantes completadas.' },
+                            { emoji: '💸', title: 'Dinero invisible', desc: 'El sueldo entra y se evapora. "¿En qué me lo gasté?"' },
+                            { emoji: '😴', title: 'Agotamiento sin propósito', desc: 'Terminas destruido, pero sin haber avanzado en nada importante.' }
+                        ].map((pain, i) => (
+                            <div key={i} className="p-6 rounded-2xl bg-red-500/5 border border-red-500/20 hover:bg-red-500/10 transition-colors">
+                                <div className="text-3xl mb-3">{pain.emoji}</div>
+                                <h3 className="font-bold mb-1">{pain.title}</h3>
+                                <p className="text-white/50 text-sm">{pain.desc}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="text-center mt-12">
+                        <p className="text-2xl text-white/40 mb-2">No es falta de voluntad.</p>
+                        <p className="text-3xl font-bold">Es falta de <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-fuchsia-400">sistema</span>.</p>
+                    </div>
+                </div>
+            </section>
+
+            {/* ========== BEFORE / AFTER ========== */}
+            <section className="py-32 px-6 bg-gradient-to-b from-transparent via-emerald-950/10 to-transparent">
+                <div className="max-w-4xl mx-auto">
+                    <div className="text-center mb-16">
+                        <p className="text-emerald-400 font-bold text-sm mb-4 tracking-wider">LA TRANSFORMACIÓN</p>
+                        <h2 className="text-4xl md:text-5xl font-black mb-4">
+                            Del caos al <span className="text-emerald-400">control total</span>
+                        </h2>
+                    </div>
+
+                    <div className="space-y-6">
+                        {[
+                            { before: 'Abres 7 apps diferentes cada mañana. Pierdes 20 minutos configurando tu día.', after: 'Un dashboard. 2 minutos. Todo planificado.' },
+                            { before: 'Comes sin saber qué estás metiendo en tu cuerpo. Culpa constante.', after: 'Control total. Sabes exactamente tus calorías y progreso.' },
+                            { before: 'Terminas el día agotado pero sin sensación de avance.', after: 'Cierre del día con wins concretos. Claridad total.' },
+                            { before: 'El dinero desaparece y no sabes a dónde.', after: 'Cada euro trackeado. Presupuesto claro. Paz financiera.' }
+                        ].map((item, i) => (
+                            <div key={i} className="grid md:grid-cols-2 gap-4">
+                                <div className="p-5 rounded-xl bg-red-500/10 border border-red-500/20">
+                                    <p className="text-red-400 font-bold text-xs mb-1">❌ ANTES</p>
+                                    <p className="text-white/70 text-sm">{item.before}</p>
+                                </div>
+                                <div className="p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                                    <p className="text-emerald-400 font-bold text-xs mb-1">✅ DESPUÉS</p>
+                                    <p className="text-white/70 text-sm">{item.after}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ========== TESTIMONIALS ========== */}
+            <section className="py-32 px-6">
+                <div className="max-w-5xl mx-auto">
+                    <div className="text-center mb-16">
+                        <p className="text-fuchsia-400 font-bold text-sm mb-4 tracking-wider">TESTIMONIOS REALES</p>
+                        <h2 className="text-4xl md:text-5xl font-black mb-4">
+                            Miles ya están <span className="text-fuchsia-400">transformando</span> sus vidas
+                        </h2>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        {[
+                            { name: 'Carlos M.', role: 'Emprendedor, 34 años', text: 'Llevaba años saltando de app en app. Life OS lo unificó todo. Por primera vez siento que controlo mi vida.', result: '-12kg en 4 meses', avatar: 'C' },
+                            { name: 'Laura S.', role: 'Diseñadora UX, 28 años', text: 'Ver todas mis áreas de vida en una sola pantalla me hace imposible esconderme de mí misma.', result: 'Streak de 127 días', avatar: 'L' },
+                            { name: 'Miguel R.', role: 'Developer, 31 años', text: 'La sección de consciencia cambió mi vida. El journaling diario me sacó del burnout.', result: 'Claridad mental en 2 meses', avatar: 'M' },
+                            { name: 'Ana G.', role: 'Product Manager, 29 años', text: 'Por fin entiendo a dónde va mi dinero. Ahorro 400€ más al mes sin privarme de nada.', result: '+€400/mes de ahorro', avatar: 'A' }
+                        ].map((t, i) => (
+                            <div key={i} className="p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
+                                <div className="flex items-start gap-3 mb-4">
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center font-bold text-lg">
+                                        {t.avatar}
+                                    </div>
+                                    <div>
+                                        <p className="font-bold">{t.name}</p>
+                                        <p className="text-white/40 text-sm">{t.role}</p>
+                                    </div>
+                                </div>
+                                <p className="text-white/70 mb-4 italic">"{t.text}"</p>
+                                <p className="text-emerald-400 font-medium text-sm">📈 {t.result}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
             {/* ========== FINAL CTA ========== */}
             <section className="py-32 px-6">
                 <div className="max-w-4xl mx-auto text-center">

@@ -10,6 +10,7 @@ import RegisterPage from './pages/RegisterPage'
 import AppPage from './pages/AppPage'
 // Sales pages
 import FeaturesPage from './pages/sales/FeaturesPage'
+import FeatureDetailPage from './pages/sales/FeatureDetailPage'
 import ForWhoPage from './pages/sales/ForWhoPage'
 import PricingPage from './pages/sales/PricingPage'
 import ResourcesPage from './pages/sales/ResourcesPage'
@@ -252,6 +253,7 @@ function App() {
                     {/* Sales Pages */}
                     <Route path="/venta" element={<LandingPage />} />
                     <Route path="/venta/features" element={<FeaturesPage />} />
+                    <Route path="/venta/features/:areaId" element={<FeatureDetailPage />} />
                     <Route path="/venta/para-quien" element={<ForWhoPage />} />
                     <Route path="/venta/precios" element={<PricingPage />} />
                     <Route path="/venta/recursos" element={<ResourcesPage />} />
