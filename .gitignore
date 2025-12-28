@@ -48,3 +48,6 @@ cleanup.py
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# Local Netlify folder
+.netlify

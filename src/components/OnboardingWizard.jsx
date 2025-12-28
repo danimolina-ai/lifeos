@@ -258,7 +258,7 @@ const FIRST_WIN_HABITS = [
 
 // TIER 2.5: Quick Tour steps
 const TOUR_STEPS = [
-    { emoji: '🏠', title: 'Hoy', desc: 'Tu centro de mando diario. Ve todo lo importante de un vistazo.' },
+    { emoji: '💥', title: 'Acción', desc: 'Tu centro de mando diario. Ve todo lo importante de un vistazo.' },
     { emoji: '🍎', title: 'Nutrición', desc: 'Trackea comidas, macros y alcanza tus objetivos.' },
     { emoji: '💪', title: 'Gym', desc: 'Registra entrenamientos, PRs y ve tu progreso.' },
     { emoji: '✅', title: 'Hábitos', desc: 'Construye rutinas y mantén rachas.' },

@@ -28,7 +28,7 @@ const TOUR_STEPS = [
         id: 'navigation',
         target: '[data-tour="navigation"]',
         title: 'Navegación Principal',
-        description: 'Usa estos botones para moverte entre vistas: Hoy, Calendario, Áreas, Control y Estadísticas.',
+        description: 'Usa estos botones para moverte entre vistas: Acción, Calendario, Áreas, Control y Estadísticas.',
         position: 'top'
     },
     {
@@ -248,10 +248,10 @@ export default function InteractiveTour({ onComplete, onSkip }) {
                                 <div
                                     key={idx}
                                     className={`w-2 h-2 rounded-full transition-colors ${idx === currentStep
-                                            ? 'bg-violet-400'
-                                            : idx < currentStep
-                                                ? 'bg-violet-400/50'
-                                                : 'bg-white/20'
+                                        ? 'bg-violet-400'
+                                        : idx < currentStep
+                                            ? 'bg-violet-400/50'
+                                            : 'bg-white/20'
                                         }`}
                                 />
                             ))}
