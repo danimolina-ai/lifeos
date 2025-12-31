@@ -278,14 +278,14 @@ function SyncIndicator() {
     )
 }
 
-// Global Header - like Notion/Slack style
+// Global Header - like Notion/Slack style - MOBILE ONLY (hidden on desktop lg+)
 function GlobalHeader() {
     const goToSettings = () => {
         window.dispatchEvent(new CustomEvent('goToSettings'))
     }
 
     return (
-        <header className="fixed top-0 left-0 right-0 z-50 h-12 bg-slate-900/95 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-4">
+        <header className="fixed top-0 left-0 right-0 z-50 h-12 bg-slate-900/95 backdrop-blur-sm border-b border-white/10 flex items-center justify-between px-4 lg:hidden">
             <div className="flex items-center gap-2">
                 <span className="text-lg">✨</span>
                 <span className="text-white/80 font-medium text-sm">Life OS</span>
@@ -323,7 +323,8 @@ function AppWithHeader() {
     return (
         <>
             <GlobalHeader />
-            <div className="pt-12">
+            {/* pt-12 only on mobile where GlobalHeader shows, lg:pt-0 on desktop */}
+            <div className="pt-12 lg:pt-0">
                 <AppPage />
             </div>
         </>

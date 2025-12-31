@@ -57,7 +57,7 @@ export default function AppPageV2() {
     const navItems = [
         { id: 'today', label: 'Hoy', icon: Home },
         { id: 'nutrition', label: 'Nutrición', icon: Utensils },
-        { id: 'workout', label: 'Entreno', icon: Dumbbell },
+        { id: 'workout', label: 'Deporte', icon: Dumbbell },
         { id: 'habits', label: 'Hábitos', icon: Target },
         { id: 'work', label: 'Trabajo', icon: CheckSquare },
         { id: 'stats', label: 'Stats', icon: BarChart3 },

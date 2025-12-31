@@ -37,7 +37,7 @@ const featureData = {
         description: 'Diseña rutinas personalizadas, trackea tu progreso, y rompe tus records personales. Cada rep cuenta.',
         screenshot: '/screenshots/dashboard.png',
         levels: {
-            simple: 'Check: ¿Entrené hoy? Tipo de entreno',
+            simple: 'Check: ¿Entrené hoy? Tipo de deporte',
             pro: 'Rutinas, ejercicios, series y reps básicos',
             hero: 'Cada peso, cada serie, PRs, progresión, historial completo'
         },

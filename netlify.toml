@@ -1,7 +1,40 @@
-[build]
-  command = "npm run build"
-  publish = "dist"
+plugins = []
+headers = []
 
-[build.environment]
+[functions]
+
+  [functions."*"]
+
+[build]
+publish = "/Users/danifocus/Desktop/antigravity/LIFEOS/dist"
+publishOrigin = "config"
+commandOrigin = "config"
+command = "npm run build"
+
+  [build.environment]
   CI = "false"
   NODE_VERSION = "20"
+
+  [build.processing]
+
+    [build.processing.css]
+
+    [build.processing.html]
+
+    [build.processing.images]
+
+    [build.processing.js]
+
+  [build.services]
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
+force = false
+
+  [redirects.query]
+
+  [redirects.conditions]
+
+  [redirects.headers]

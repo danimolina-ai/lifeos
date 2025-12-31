@@ -5672,7 +5672,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
           {
             activeAreas.includes('personal') && (() => {
               const personalTasks = data.personalTasks || [];
-              const personalCategories = data.personalCategories || [
+              const defaultCategories = [
                 { id: 'home', name: 'Hogar', icon: '🏠', color: '#10B981' },
                 { id: 'admin', name: 'Admin', icon: '📋', color: '#6366F1' },
                 { id: 'health', name: 'Salud', icon: '❤️', color: '#EF4444' },
@@ -5681,6 +5681,9 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
                 { id: 'learning', name: 'Aprendizaje', icon: '📚', color: '#8B5CF6' },
                 { id: 'projects', name: 'Proyectos', icon: '🚀', color: '#EC4899' }
               ];
+              const personalCategories = (data.personalCategories && data.personalCategories.length > 0)
+                ? data.personalCategories
+                : defaultCategories;
 
               const todayTasks = personalTasks.filter(t => !t.completed && t.dueDate === viewDate);
               const overdueTasks = personalTasks.filter(t => !t.completed && t.dueDate && t.dueDate < viewDate);
@@ -5689,7 +5692,7 @@ const TodayScreen = ({ data, setData, setScreen, showToast }) => {
               const allPending = [...overdueTasks, ...todayTasks, ...upcomingTasks.slice(0, 2), ...noDueTasks.slice(0, 1)];
               const completedToday = personalTasks.filter(t => t.completed && t.completedAt?.startsWith(viewDate)).length;
 
-              const getCat = (id) => personalCategories.find(c => c.id === id) || personalCategories[0];
+              const getCat = (id) => personalCategories.find(c => c.id === id) || defaultCategories[0];
 
               const togglePersonalTask = (id) => {
                 setData(prev => ({

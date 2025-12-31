@@ -10,7 +10,7 @@ const personas = [
         color: 'from-red-500/20 to-orange-500/10',
         description: 'Entrenas consistentemente, cuidas tu alimentación, y buscas una forma de trackear todo sin usar 5 apps diferentes.',
         challenges: [
-            'MyFitnessPal para comida, Strong para entrenos, otra para hábitos...',
+            'MyFitnessPal para comida, Strong para deportes, otra para hábitos...',
             'Pierdes tiempo alternando entre apps',
             'No ves la conexión entre nutrición, entrenamiento y recuperación'
         ],
