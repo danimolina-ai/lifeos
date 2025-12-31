@@ -11,11 +11,17 @@ import { LogOut, User } from 'lucide-react';
 import OnboardingWizard from '../components/OnboardingWizard';
 import InteractiveTour from '../components/InteractiveTour';
 
-// NEW: Import extracted modules
+// Extracted utilities
 import { getToday, getDateOffset, formatDate, formatDateShort, formatShortDate, generateId, isToday, isPast, getWeekDates, getGreeting } from '../utils/date';
 import { calculateDayScore, getHabitStreak } from '../utils/score';
+import { formatMinutes, formatSeconds, formatTimer, getScoreColor, getScoreBgColor, getScoreHexColor, getRelationshipHealthScore } from '../utils/formatting';
+import { shouldDoHabitOnDay, getStreakWithFreeze as getStreakWithFreezeUtil, getMissedYesterday as getMissedYesterdayUtil, getMasteryLevel as getMasteryLevelUtil, getGratitudeStreak } from '../utils/habits';
+
+// Extracted hooks and data
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { EMPTY_DATA, DEFAULT_DATA, SAMPLE_HABITS, SAMPLE_PROJECTS, SAMPLE_EXERCISES, WORKOUT_TEMPLATES, DEFAULT_ROUTINES, DEFAULT_PERSONAL_CATEGORIES } from '../data/appData';
+
+// UI Components
 import { Card, Modal, Toast, Section, ProgressBar, DayScore, MiniChart, EnergyIndicator, WaterTracker, MoodSelector, NavItem, EmptyState, ProgressRing, AnimatedMount, RestTimer, SwipeableItem } from '../components/ui';
 import { AccordionSection } from '../components/ui/AccordionSection';
 import { SleepInput } from '../components/ui/SleepInput';
